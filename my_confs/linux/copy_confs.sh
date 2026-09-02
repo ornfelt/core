@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 
-cp "$HOME"/vmangos/etc/*.conf ./
+rm *.conf && cp "$HOME"/vmangos/etc/*.conf ./
 

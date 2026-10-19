@@ -69,6 +69,7 @@
 #include "AuctionHouseBotMgr.h"
 #include "Transports/TransportMgr.h"
 #include "PlayerBotMgr.h"
+#include "WanderNodeMgr.h"
 #include "ZoneScriptMgr.h"
 #include "CharacterDatabaseCache.h"
 #include "CreatureGroups.h"
@@ -994,6 +995,18 @@ void World::LoadConfigSettings(bool reload)
     setConfigMinMax(CONFIG_UINT32_BATTLE_BOT_AUTO_EQUIP, "BattleBot.AutoEquip", PLAYER_BOT_AUTO_EQUIP_RANDOM_GEAR, PLAYER_BOT_AUTO_EQUIP_STARTING_GEAR, PLAYER_BOT_AUTO_EQUIP_PREMADE_GEAR);
     setConfig(CONFIG_UINT32_PARTY_BOT_RANDOM_GEAR_LEVEL_DIFFERENCE, "PartyBot.RandomGearLevelDifference", 10);
 
+    setConfig(CONFIG_BOOL_WANDER_BOT_ENABLE, "WanderBot.Enable", true);
+    setConfig(CONFIG_UINT32_WANDER_BOT_MIN_BOTS, "WanderBot.MinBots", 60);
+    setConfig(CONFIG_UINT32_WANDER_BOT_MAX_BOTS, "WanderBot.MaxBots", 120);
+    if (getConfig(CONFIG_UINT32_WANDER_BOT_MAX_BOTS) < getConfig(CONFIG_UINT32_WANDER_BOT_MIN_BOTS))
+    {
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "WanderBot.MaxBots (%u) can't be less than WanderBot.MinBots (%u). Using %u instead.", getConfig(CONFIG_UINT32_WANDER_BOT_MAX_BOTS), getConfig(CONFIG_UINT32_WANDER_BOT_MIN_BOTS), getConfig(CONFIG_UINT32_WANDER_BOT_MIN_BOTS));
+        setConfig(CONFIG_UINT32_WANDER_BOT_MAX_BOTS, getConfig(CONFIG_UINT32_WANDER_BOT_MIN_BOTS));
+    }
+    setConfigMin(CONFIG_UINT32_WANDER_BOT_REFRESH, "WanderBot.Refresh", MINUTE * IN_MILLISECONDS, IN_MILLISECONDS);
+    setConfigMinMax(CONFIG_UINT32_WANDER_BOT_AUTO_EQUIP, "WanderBot.AutoEquip", PLAYER_BOT_AUTO_EQUIP_RANDOM_GEAR, PLAYER_BOT_AUTO_EQUIP_STARTING_GEAR, PLAYER_BOT_AUTO_EQUIP_PREMADE_GEAR);
+    setConfig(CONFIG_UINT32_WANDER_BOT_RANDOM_GEAR_LEVEL_DIFFERENCE, "WanderBot.RandomGearLevelDifference", 10);
+
     setConfigMinMax(CONFIG_UINT32_SPELL_EFFECT_DELAY, "Spell.EffectDelay", 400, 0, 1000);
     setConfigMinMax(CONFIG_UINT32_SPELL_PROC_DELAY, "Spell.ProcDelay", 400, 0, 1000);
     setConfigMinMax(CONFIG_UINT32_DEBUFF_LIMIT, "DebuffLimit", 0, 0, 40);
@@ -1844,6 +1857,9 @@ void World::SetInitialWorldSettings()
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Caching player pets ...");
     sCharacterDatabaseCache.LoadAll();
+
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Loading wander bot nodes ...");
+    sWanderNodeMgr.Load();
 
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "Loading PlayerBot ..."); // Requires Players cache
     sPlayerBotMgr.Load();

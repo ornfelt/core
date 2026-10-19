@@ -78,6 +78,8 @@ struct WanderNode
     bool IsWalkableFor(Team team) const;
     // A bot of this team may spawn or be teleported here.
     bool IsStartPointFor(Team team) const;
+    // A bot of this team and level can walk on from here.
+    bool HasLinkFor(Team team, uint32 level) const;
     float GetDistance2dSq(float px, float py) const { return (x - px) * (x - px) + (y - py) * (y - py); }
 };
 
@@ -88,15 +90,17 @@ class WanderNodeMgr
 
         bool IsLoaded() const { return !m_nodes.empty(); }
         uint32 GetNodeCount() const { return m_nodes.size(); }
+        uint32 GetSpawnNodeCount() const { return m_spawnNodes.size(); }
         WanderNode const* GetNode(uint32 id) const;
 
-        // A random spawn node that fits the team and level, or nullptr.
+        // A random spawn node that fits the team and level and has a link that does, or nullptr.
         WanderNode const* SelectSpawnNode(Team team, uint32 level) const;
         // A random link of the current node that fits the team and level. The previous node is only picked when
         // it is the only fitting link or the current node allows backtracking. nullptr when no link fits.
         WanderNode const* SelectNextNode(WanderNode const* current, WanderNode const* previous, Team team, uint32 level) const;
-        // The nearest node on the map, within maxDist, that the team may walk to and that fits the level, or nullptr.
-        WanderNode const* FindNearestNode(uint32 mapId, float x, float y, Team team, uint32 level, float maxDist) const;
+        // The nearest node on the map, within maxDist, that the team may walk to and that fits the level, other than
+        // pExcept, or nullptr.
+        WanderNode const* FindNearestNode(uint32 mapId, float x, float y, Team team, uint32 level, float maxDist, WanderNode const* pExcept = nullptr) const;
         // All nodes on the map within range (for GM commands).
         void GetNodesInRange(uint32 mapId, float x, float y, float range, std::vector<WanderNode const*>& nodes) const;
 

@@ -67,6 +67,20 @@ struct PlayerBotStats
 };
 
 
+// Level bands of the wandering bot counts (.wanderbot info): 1-10, 11-20, ... 51-60.
+#define WANDER_BOT_STATS_LEVEL_BAND 10
+#define WANDER_BOT_STATS_LEVEL_BANDS 6
+
+struct WanderBotStats
+{
+    uint32 online = 0;
+    uint32 loading = 0;
+    uint32 alliance = 0;
+    uint32 horde = 0;
+    uint32 dead = 0;
+    uint32 perLevelBand[WANDER_BOT_STATS_LEVEL_BANDS] = {};
+};
+
 class PlayerBotMgr
 {
     public:
@@ -90,6 +104,15 @@ class PlayerBotMgr
         void AddBattleBot(BattleGroundQueueTypeId queueType, Team botTeam, uint32 botLevel, bool temporary);
         void DeleteBattleBots();
 
+        // Wandering bots: a random team, class, race and, with level 0, a random level.
+        bool AddWanderBot(uint32 level = 0);
+        // Adds count bots and raises the current target by the bots added (until the next refresh).
+        uint32 AddWanderBots(uint32 level, uint32 count);
+        bool DeleteWanderBot(Player* pBot);
+        void DeleteWanderBots();
+        void GetWanderBotStats(WanderBotStats& stats) const;
+        uint32 GetWanderBotsTarget() const { return m_wanderBotsTarget; }
+
         void DeleteAll();
         void AddAllBots();
 
@@ -103,6 +126,7 @@ class PlayerBotMgr
         bool IsPermanentBot(uint32 playerGuid);
         bool IsChatBot(uint32 playerGuid);
         bool IsSavingAllowed() { return m_confAllowSaving; }
+        bool IsDebugEnabled() const { return m_confDebug; }
 
         uint32 GenBotAccountId() { return ++m_maxAccountId; }
         PlayerBotStats& GetStats(){ return m_stats; }
@@ -115,6 +139,10 @@ class PlayerBotMgr
         uint32 m_totalChance;
         uint32 m_maxAccountId;
         time_t m_lastBattleBotQueueUpdate;
+        uint32 m_lastWanderBotsRefresh;
+        uint32 m_wanderBotsTarget;
+
+        void UpdateWanderBots();
 
         std::map<uint64 /*pl guid*/, std::shared_ptr<PlayerBotEntry>> m_bots;
         std::map<uint32 /*account*/, uint32> m_tempBots;

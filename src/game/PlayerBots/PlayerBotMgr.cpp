@@ -13,6 +13,8 @@
 #include "PartyBotAI.h"
 #include "BattleBotAI.h"
 #include "BattleBotWaypoints.h"
+#include "WanderBotAI.h"
+#include "WanderNodeMgr.h"
 #include "BattleGroundMgr.h"
 #include "MapManager.h"
 #include "Language.h"
@@ -21,6 +23,8 @@
 
 INSTANTIATE_SINGLETON_1(PlayerBotMgr);
 
+// Wandering bots added or removed per manager update (PlayerBot.UpdateMs), so they do not all log in at once.
+#define WANDER_BOT_CHANGES_PER_UPDATE 4
 
 PlayerBotMgr::PlayerBotMgr()
 {
@@ -41,6 +45,8 @@ PlayerBotMgr::PlayerBotMgr()
     m_lastBotsRefresh = 0;
     m_lastUpdate = 0;
     m_lastBattleBotQueueUpdate = 0;
+    m_lastWanderBotsRefresh = 0;
+    m_wanderBotsTarget = 0;
 }
 
 PlayerBotMgr::~PlayerBotMgr()
@@ -130,14 +136,30 @@ void PlayerBotMgr::Load()
             AddRandomBot();
     }
 
-    // 7- Fill stats info
+    // 7- Wandering bots: Update spawns MinBots, a few at a time, then moves between min and max every refresh.
+    m_wanderBotsTarget = 0;
+    m_lastWanderBotsRefresh = m_elapsedTime;
+    if (sWorld.getConfig(CONFIG_BOOL_WANDER_BOT_ENABLE))
+    {
+        if (sWanderNodeMgr.IsLoaded())
+        {
+            m_wanderBotsTarget = sWorld.getConfig(CONFIG_UINT32_WANDER_BOT_MIN_BOTS);
+            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> [PlayerBotMgr] Spawning %u wandering bots (between %u and %u, refresh every %u ms).",
+                m_wanderBotsTarget, sWorld.getConfig(CONFIG_UINT32_WANDER_BOT_MIN_BOTS), sWorld.getConfig(CONFIG_UINT32_WANDER_BOT_MAX_BOTS),
+                sWorld.getConfig(CONFIG_UINT32_WANDER_BOT_REFRESH));
+        }
+        else
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[PlayerBotMgr] WanderBot.Enable is set but no wander nodes are loaded: no wandering bots.");
+    }
+
+    // 8- Fill stats info
     m_stats.confMaxOnline = m_confMaxRandomBots;
     m_stats.confMinOnline = m_confMinRandomBots;
     m_stats.totalBots = m_bots.size();
     m_stats.confRandomBotsRefresh = m_confRandomBotsRefresh;
     m_stats.confUpdateDiff = m_confUpdateDiff;
 
-    // 8- Show stats if debug
+    // 9- Show stats if debug
     if (m_confDebug)
     {
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[PlayerBotMgr] Between %u and %u bots online", m_confMinRandomBots, m_confMaxRandomBots);
@@ -363,6 +385,9 @@ void PlayerBotMgr::Update(uint32 diff)
         }
     }
 
+    if (sWorld.getConfig(CONFIG_BOOL_WANDER_BOT_ENABLE) && sWanderNodeMgr.IsLoaded())
+        UpdateWanderBots();
+
     if (m_confEnableRandomBots)
     {
         uint32 updatesCount = (m_elapsedTime - m_lastBotsRefresh) / m_confRandomBotsRefresh;
@@ -577,15 +602,20 @@ uint8 SelectRandomRaceForClass(uint8 playerClass, Team playerTeam)
     return SelectRandomContainerElement(validRaces);
 }
 
-void PlayerBotMgr::AddBattleBot(BattleGroundQueueTypeId queueType, Team botTeam, uint32 botLevel, bool temporary)
+uint8 SelectRandomClassForTeam(Team playerTeam)
 {
     std::vector<uint32> availableClasses = { CLASS_WARRIOR, CLASS_HUNTER, CLASS_ROGUE, CLASS_MAGE, CLASS_WARLOCK, CLASS_PRIEST, CLASS_DRUID };
-    if (botTeam == HORDE)
+    if (playerTeam == HORDE)
         availableClasses.push_back(CLASS_SHAMAN);
     else
         availableClasses.push_back(CLASS_PALADIN);
 
-    uint8 botClass = SelectRandomContainerElement(availableClasses);
+    return SelectRandomContainerElement(availableClasses);
+}
+
+void PlayerBotMgr::AddBattleBot(BattleGroundQueueTypeId queueType, Team botTeam, uint32 botLevel, bool temporary)
+{
+    uint8 botClass = SelectRandomClassForTeam(botTeam);
     uint8 botRace = SelectRandomRaceForClass(botClass, botTeam);
     if (!botRace)
         return;
@@ -627,10 +657,139 @@ void PlayerBotMgr::DeleteBattleBots()
 {
     for (auto const& itr : m_bots)
     {
-        if (dynamic_cast<BattleBotAI*>(itr.second->ai.get()))
+        // A WanderBotAI is a BattleBotAI, but wandering bots are not battle bots.
+        if (dynamic_cast<BattleBotAI*>(itr.second->ai.get()) && !dynamic_cast<WanderBotAI*>(itr.second->ai.get()))
             itr.second->requestRemoval = true;
     }
     m_confBattleBotAutoJoin = false;
+}
+
+bool PlayerBotMgr::AddWanderBot(uint32 level)
+{
+    Team const botTeam = urand(0, 1) ? ALLIANCE : HORDE;
+    uint8 const botClass = SelectRandomClassForTeam(botTeam);
+    uint8 const botRace = SelectRandomRaceForClass(botClass, botTeam);
+    if (!botRace)
+        return false;
+
+    if (!level)
+        level = urand(1, sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL));
+
+    WanderNode const* pNode = sWanderNodeMgr.SelectSpawnNode(botTeam, level);
+    if (!pNode)
+    {
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[PlayerBotMgr] No wander spawn node for a level %u %s bot.", level, botTeam == ALLIANCE ? "Alliance" : "Horde");
+        return false;
+    }
+
+    uint32 const instanceId = sMapMgr.GetContinentInstanceId(pNode->mapId, pNode->x, pNode->y);
+    return AddBot(new WanderBotAI(botRace, botClass, level, pNode->mapId, instanceId, pNode));
+}
+
+uint32 PlayerBotMgr::AddWanderBots(uint32 level, uint32 count)
+{
+    uint32 added = 0;
+    for (uint32 i = 0; i < count; ++i)
+    {
+        if (AddWanderBot(level))
+            ++added;
+    }
+    m_wanderBotsTarget += added;
+    return added;
+}
+
+bool PlayerBotMgr::DeleteWanderBot(Player* pBot)
+{
+    WanderBotAI* pAI = dynamic_cast<WanderBotAI*>(pBot->AI());
+    if (!pAI || !pAI->botEntry)
+        return false;
+
+    pAI->botEntry->requestRemoval = true;
+    if (m_wanderBotsTarget)
+        --m_wanderBotsTarget;
+    return true;
+}
+
+void PlayerBotMgr::GetWanderBotStats(WanderBotStats& stats) const
+{
+    for (auto const& itr : m_bots)
+    {
+        if (itr.second->state == PB_STATE_OFFLINE || !dynamic_cast<WanderBotAI*>(itr.second->ai.get()))
+            continue;
+
+        if (itr.second->state == PB_STATE_LOADING)
+        {
+            ++stats.loading;
+            continue;
+        }
+
+        ++stats.online;
+        Player const* pBot = itr.second->ai->me;
+        if (!pBot)
+            continue;
+
+        if (pBot->GetTeam() == ALLIANCE)
+            ++stats.alliance;
+        else
+            ++stats.horde;
+
+        if (pBot->IsDead())
+            ++stats.dead;
+
+        uint32 const band = std::min<uint32>((pBot->GetLevel() - 1) / WANDER_BOT_STATS_LEVEL_BAND, WANDER_BOT_STATS_LEVEL_BANDS - 1);
+        ++stats.perLevelBand[band];
+    }
+}
+
+void PlayerBotMgr::DeleteWanderBots()
+{
+    for (auto const& itr : m_bots)
+    {
+        if (dynamic_cast<WanderBotAI*>(itr.second->ai.get()))
+            itr.second->requestRemoval = true;
+    }
+    m_wanderBotsTarget = 0;
+}
+
+void PlayerBotMgr::UpdateWanderBots()
+{
+    // Every refresh, a new amount between min and max to move towards.
+    if (m_elapsedTime - m_lastWanderBotsRefresh >= sWorld.getConfig(CONFIG_UINT32_WANDER_BOT_REFRESH))
+    {
+        m_lastWanderBotsRefresh = m_elapsedTime;
+        m_wanderBotsTarget = urand(sWorld.getConfig(CONFIG_UINT32_WANDER_BOT_MIN_BOTS), sWorld.getConfig(CONFIG_UINT32_WANDER_BOT_MAX_BOTS));
+    }
+
+    uint32 count = 0;
+    std::vector<PlayerBotEntry*> removable;
+    for (auto const& itr : m_bots)
+    {
+        if (itr.second->state == PB_STATE_OFFLINE || itr.second->requestRemoval ||
+            !dynamic_cast<WanderBotAI*>(itr.second->ai.get()))
+            continue;
+
+        ++count;
+        if (itr.second->state == PB_STATE_ONLINE)
+            removable.push_back(itr.second.get());
+    }
+
+    if (count < m_wanderBotsTarget)
+    {
+        uint32 const toAdd = std::min<uint32>(m_wanderBotsTarget - count, WANDER_BOT_CHANGES_PER_UPDATE);
+        for (uint32 i = 0; i < toAdd; ++i)
+            AddWanderBot();
+    }
+    else if (count > m_wanderBotsTarget)
+    {
+        uint32 const toRemove = std::min<uint32>(std::min<uint32>(count - m_wanderBotsTarget, WANDER_BOT_CHANGES_PER_UPDATE), removable.size());
+        for (uint32 i = 0; i < toRemove; ++i)
+        {
+            // Random bots: a partial Fisher-Yates shuffle.
+            uint32 const index = urand(i, removable.size() - 1);
+            std::swap(removable[i], removable[index]);
+            removable[i]->requestRemoval = true;
+        }
+    }
 }
 
 bool PlayerBotMgr::ForceAccountConnection(WorldSession* sess)
@@ -1931,7 +2090,8 @@ bool ChatHandler::HandleBattleBotRemoveCommand(char* args)
 
     if (pTarget->AI())
     {
-        if (BattleBotAI* pAI = dynamic_cast<BattleBotAI*>(pTarget->AI()))
+        BattleBotAI* pAI = dynamic_cast<BattleBotAI*>(pTarget->AI());
+        if (pAI && !dynamic_cast<WanderBotAI*>(pAI))
         {
             pAI->botEntry->requestRemoval = true;
             return true;

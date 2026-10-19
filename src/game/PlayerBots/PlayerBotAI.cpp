@@ -121,6 +121,10 @@ bool PlayerBotAI::SpawnNewPlayer(WorldSession* sess, uint8 class_, uint32 race_,
     }
     // Generate position
     Map* map = sMapMgr.FindMap(mapId, instanceId);
+    // A continent no player has entered yet is created on demand.
+    MapEntry const* mapEntry = sMapStorage.LookupEntry<MapEntry>(mapId);
+    if (!map && mapEntry && mapEntry->IsContinent())
+        map = sMapMgr.CreateMap(mapId, newChar);
     if (!map)
     {
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "PlayerBotAI::SpawnNewPlayer: Map (%u, %u) not found!", mapId, instanceId);

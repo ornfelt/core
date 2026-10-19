@@ -47,9 +47,9 @@ public:
     }
   
     void OnPlayerLogin() final;
-    void UpdateAI(uint32 const diff) final;
+    void UpdateAI(uint32 const diff) override;
     void OnPacketReceived(WorldPacket const* packet) final;
-    void MovementInform(uint32 MovementType, uint32 Data = 0) final;
+    void MovementInform(uint32 MovementType, uint32 Data = 0) override;
 
     bool ShouldIgnoreCombat() const;
     bool DrinkAndEat();

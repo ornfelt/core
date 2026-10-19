@@ -133,6 +133,16 @@ ChatCommand * ChatHandler::getCommandTable()
         { nullptr,        0,                    false, nullptr,                                          "", nullptr },
     };
 
+    static ChatCommand wanderBotCommandTable[] =
+    {
+        { "add",       SEC_ADMINISTRATOR, true,  &ChatHandler::HandleWanderBotAddCommand,       "Syntax: .wanderbot add [level] [count]\r\n\r\nAdd count (default 1) wandering bots of the level (default 0: random) at random spawn nodes that fit it.", nullptr },
+        { "remove",    SEC_ADMINISTRATOR, false, &ChatHandler::HandleWanderBotRemoveCommand,    "Syntax: .wanderbot remove\r\n\r\nRemove the selected wandering bot.", nullptr },
+        { "removeall", SEC_ADMINISTRATOR, true,  &ChatHandler::HandleWanderBotRemoveAllCommand, "Syntax: .wanderbot removeall\r\n\r\nRemove all wandering bots. New ones are spawned at the next refresh (WanderBot.Refresh).", nullptr },
+        { "info",      SEC_ADMINISTRATOR, true,  &ChatHandler::HandleWanderBotInfoCommand,      "Syntax: .wanderbot info\r\n\r\nShow the wandering bot counts (online, loading, target, per faction and level) and the wander nodes loaded, and the node of the selected wandering bot.", nullptr },
+        { "nodes",     SEC_ADMINISTRATOR, false, &ChatHandler::HandleWanderBotNodesCommand,     "Syntax: .wanderbot nodes [range]\r\n\r\nList the wander nodes within range (default 50 yards) of you.", nullptr },
+        { nullptr,     0,                 false, nullptr,                                       "", nullptr },
+    };
+
     static ChatCommand accountSetCommandTable[] =
     {
         { "addon",          SEC_CONSOLE,        true,  &ChatHandler::HandleAccountSetAddonCommand,     "", nullptr },
@@ -1220,6 +1230,7 @@ ChatCommand * ChatHandler::getCommandTable()
         { "ahbot",          SEC_ADMINISTRATOR,  true, nullptr,                            "Manage AH bot", ahbotCommandTable    },
         { "partybot",       SEC_ADMINISTRATOR,  false, nullptr,                       "Manage party bots", partyBotCommandTable },
         { "battlebot",      SEC_ADMINISTRATOR,  true, nullptr,                      "Manage battle bots", battleBotCommandTable},
+        { "wanderbot",      SEC_ADMINISTRATOR,  true, nullptr,                   "Manage wandering bots", wanderBotCommandTable},
         { "world",          SEC_ADMINISTRATOR,  false, nullptr,                                        "", worldCommandTable    },
         { "possess",        SEC_GAMEMASTER,     false, &ChatHandler::HandlePossessCommand,             "", nullptr              },
         { "cinematic",      SEC_DEVELOPER,      false, nullptr,                                        "", cinematicCommandTable},

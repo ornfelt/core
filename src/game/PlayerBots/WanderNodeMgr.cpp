@@ -281,12 +281,21 @@ WanderNode const* WanderNodeMgr::GetNode(uint32 id) const
     return itr != m_nodes.end() ? &itr->second : nullptr;
 }
 
+bool WanderNode::HasLinkFor(Team team, uint32 level) const
+{
+    return std::any_of(links.begin(), links.end(), [team, level](WanderNode const* link)
+    {
+        return link->IsWalkableFor(team) && link->FitsLevel(level);
+    });
+}
+
 WanderNode const* WanderNodeMgr::SelectSpawnNode(Team team, uint32 level) const
 {
     std::vector<WanderNode const*> candidates;
     for (WanderNode const* node : m_spawnNodes)
     {
-        if (node->IsStartPointFor(team) && node->FitsLevel(level))
+        // A spawn node leading only to other level ranges (a 1-60 town gate into a start zone) would strand the bot.
+        if (node->IsStartPointFor(team) && node->FitsLevel(level) && node->HasLinkFor(team, level))
             candidates.push_back(node);
     }
 
@@ -315,14 +324,14 @@ WanderNode const* WanderNodeMgr::SelectNextNode(WanderNode const* current, Wande
     return SelectRandomContainerElement(candidates);
 }
 
-WanderNode const* WanderNodeMgr::FindNearestNode(uint32 mapId, float x, float y, Team team, uint32 level, float maxDist) const
+WanderNode const* WanderNodeMgr::FindNearestNode(uint32 mapId, float x, float y, Team team, uint32 level, float maxDist, WanderNode const* pExcept) const
 {
     WanderNode const* nearest = nullptr;
     float nearestDistSq = maxDist * maxDist;
     for (auto const& itr : m_nodes)
     {
         WanderNode const& node = itr.second;
-        if (node.mapId != mapId || !node.IsWalkableFor(team) || !node.FitsLevel(level))
+        if (&node == pExcept || node.mapId != mapId || !node.IsWalkableFor(team) || !node.FitsLevel(level))
             continue;
 
         float const distSq = node.GetDistance2dSq(x, y);

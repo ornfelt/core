@@ -196,6 +196,10 @@ set (game_SRCS
     PlayerBots/PlayerBotAI.cpp
     PlayerBots/PlayerBotMgr.cpp
     PlayerBots/WanderNodeMgr.cpp
+    PlayerBots/WanderBotAI.cpp
+    PlayerBots/WanderBotCommands.cpp
+    PlayerBots/WanderBotMovement.cpp
+    PlayerBots/WanderBotTargeting.cpp
     Server/Protocol/Opcodes.cpp
     Server/Packets/Battleground.cpp
     Server/Packets/AuctionHouse.cpp
@@ -450,6 +454,7 @@ set (game_SRCS
     PlayerBots/PlayerBotAI.h
     PlayerBots/PlayerBotMgr.h
     PlayerBots/WanderNodeMgr.h
+    PlayerBots/WanderBotAI.h
     Server/Protocol/Opcodes.h
     Server/Protocol/Opcodes_active.h
     Server/Packet.h

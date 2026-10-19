@@ -792,6 +792,12 @@ void PlayerBotMgr::UpdateWanderBots()
     }
 }
 
+bool PlayerBotMgr::IsExemptFromPlayerLimit(WorldSession const* sess) const
+{
+    PlayerBotEntry const* pEntry = sess->GetBot();
+    return pEntry && dynamic_cast<WanderBotAI const*>(pEntry->ai.get());
+}
+
 bool PlayerBotMgr::ForceAccountConnection(WorldSession* sess)
 {
     if (sess->GetBot())

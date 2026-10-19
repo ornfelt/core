@@ -305,7 +305,7 @@ void World::AddSession_(WorldSession* s)
 
     m_sessions[s->GetAccountId()] = s;
 
-    uint32 activeSessions = GetActiveSessionCount();
+    uint32 activeSessions = GetPlayerLimitedSessionCount();
     uint32 playerLimit = GetPlayerAmountLimit();
     uint32 queuedSessions = GetQueuedSessionCount();             //number of players in the queue
 
@@ -341,7 +341,7 @@ void World::AddSession_(WorldSession* s)
     // Updates the population
     if (playerLimit > 0)
     {
-        float popu = float(GetActiveSessionCount());        // updated number of users on the server
+        float popu = float(GetPlayerLimitedSessionCount()); // updated number of users on the server
         popu /= playerLimit;
         popu *= 2;
 
@@ -389,7 +389,7 @@ void World::AddQueuedSession(WorldSession* sess)
 bool World::RemoveQueuedSession(WorldSession* sess)
 {
     // sessions count including queued to remove (if removed_session set)
-    uint32 sessions = GetActiveSessionCount();
+    uint32 sessions = GetPlayerLimitedSessionCount();
 
     uint32 position = 1;
     Queue::iterator iter = m_QueuedSessions.begin();
@@ -412,10 +412,10 @@ bool World::RemoveQueuedSession(WorldSession* sess)
     // position store position of removed socket and then new position next socket after removed
 
     // if session not queued then we need decrease sessions count
-    if (!found && sessions)
+    if (!found && sessions && !sPlayerBotMgr.IsExemptFromPlayerLimit(sess))
         --sessions;
 
-    uint32 loggedInSessions = uint32(m_sessions.size() - m_QueuedSessions.size());
+    uint32 loggedInSessions = GetPlayerLimitedSessionCount();
     if (loggedInSessions > getConfig(CONFIG_UINT32_PLAYER_HARD_LIMIT))
         return found;
 
@@ -2801,7 +2801,7 @@ void World::UpdateSessions(uint32 diff)
     int32 hardPlayerLimit = getConfig(CONFIG_UINT32_PLAYER_HARD_LIMIT);
     if (hardPlayerLimit)
         m_playerLimit = std::min(hardPlayerLimit, m_playerLimit);
-    uint32 loggedInSessions = uint32(m_sessions.size() - m_QueuedSessions.size());
+    uint32 loggedInSessions = GetPlayerLimitedSessionCount();
     if (m_playerLimit >= 0 && static_cast <int32> (loggedInSessions) < hardPlayerLimit)
         if (uint32 acceptNow = getConfig(CONFIG_UINT32_LOGIN_PER_TICK))
         {
@@ -3194,9 +3194,27 @@ void World::LogTransaction(PlayerTransactionData const& data)
     logStmt.Execute();
 }
 
+uint32 World::GetPlayerLimitedSessionCount() const
+{
+    uint32 count = GetActiveSessionCount();
+    if (!getConfig(CONFIG_BOOL_WANDER_BOT_ENABLE))
+        return count;
+
+    // Wandering bots skip the queue (CanSkipQueue), so all of them are among the active sessions.
+    for (auto const& itr : m_sessions)
+    {
+        if (count && sPlayerBotMgr.IsExemptFromPlayerLimit(itr.second))
+            --count;
+    }
+    return count;
+}
+
 bool World::CanSkipQueue(WorldSession const* sess)
 {
     if (sess->GetSecurity() > SEC_PLAYER)
+        return true;
+    // Wandering bots neither queue nor take a player slot.
+    if (sPlayerBotMgr.IsExemptFromPlayerLimit(sess))
         return true;
     uint32 grace_period = getConfig(CONFIG_UINT32_LOGIN_QUEUE_GRACE_PERIOD_SECS);
     if (!grace_period)

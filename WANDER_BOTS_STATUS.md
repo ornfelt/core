@@ -1,8 +1,9 @@
 # Wandering bots - status
-Last run: 2026-10-19 (run 2) - step 3 (spawning, min / max loop), step 4 (wandering, death, stuck handling), most of
-step 5 (monster / PvP targeting, leash, guard check) and step 6 (`.wanderbot` commands); verified with 3 server runs.
-Next: answer the `PlayerLimit` question (see "Open issues"), then step 5's rest (pets checked in a run, deaths per
-hour tuned) and step 2c's open part; then step 7.
+Last run: 2026-10-19 (run 3) - wandering bot sessions skip the login queue and do not count towards `PlayerLimit`
+(the user chose option (a) of run 2's question).
+Before that (run 2): step 3, step 4, most of step 5 and step 6.
+Next: step 5's rest (pets checked in a run, deaths per hour looked at per cause) and step 2c's open part; then
+step 7.
 
 ## Steps
 
@@ -40,6 +41,10 @@ hour tuned) and step 2c's open part; then step 7.
       node), `WanderBotAI::Initialize` (level, talents and spells, role, gear with `WanderBot.AutoEquip` and
       `WanderBot.RandomGearLevelDifference`, reagents, skills, pet, XP rate 0). `SpawnNewPlayer` now creates a
       continent no player has entered yet instead of failing (before: `Map (1, 0) not found`).
+      Run 3: wandering bot sessions never queue and do not take a player slot: `World::CanSkipQueue` lets them
+      through, and the `PlayerLimit` / `PlayerHardLimit` checks and the realm population use the new
+      `World::GetPlayerLimitedSessionCount()` (active sessions minus wandering bots, via
+      `PlayerBotMgr::IsExemptFromPlayerLimit`). Documented under `WanderBot.MaxBots` in the confs.
 - [x] 4 Wandering (2026-10-19): `WanderBotMovement.cpp` - walk along links (`MovePoint` with pathfinding,
       straight between two `IGNORES_PATHING` nodes, random offset within `proximity`), level / faction-fitting
       next node, the nearest fitting node within 800 yd at a dead end, else a teleport to a fitting spawn node;
@@ -167,6 +172,12 @@ Movement state: `m_node` (walking to, or paused at once `m_arrived`), `m_previou
   bots never pick a player as a new target and only fight back.
 - **Death** (skill default): release after 5 s, revive at the graveyard 10 s later with 50 % health (no corpse
   run: the bot does not walk back), bones left at the corpse, then on from the nearest fitting node.
+- **`PlayerLimit`** (user's choice, 2026-10-19): wandering bots skip the queue and do not count towards
+  `PlayerLimit` / `PlayerHardLimit` or the realm population; party / battle / random bots are unchanged (they
+  still count). Sessions enter and leave `m_sessions` in six places, so instead of a counter that could drift,
+  `GetPlayerLimitedSessionCount()` scans the sessions - only with `WanderBot.Enable`, once per login / logout
+  and once per world tick in `UpdateSessions`. The uptime table, `.server info` and the `Creature` respawn
+  scaling still count every session (bots included).
 - **Staggered spawning**: 4 bots per manager update (`PlayerBot.UpdateMs` = 1000 here: 60 bots in about 15 s).
 - **`.wanderbot add` / `remove` move the current target** so the loop does not undo them at once; the next
   refresh picks a new target as usual. `removeall` sets the target to 0 until the next refresh.
@@ -180,6 +191,10 @@ Movement state: `m_node` (walking to, or paused at once `m_arrived`), `m_previou
   fed through stdin.
 
 ## Verification
+
+- 2026-10-19 (run 3) build: exit 0, no warnings. Server run 4 (`PlayerLimit = 20` in the scratch conf): 62 bots
+  online at 1:21 and 82 at 2:41, `0 queued` both times, Alliance 39 / Horde 43, 106 node arrivals, 17 deaths,
+  clean shutdown. A real player taking a free slot next to the bots was not tested (needs a client).
 
 - 2026-10-19 (run 2) build: `cmake --build build --config Release -j 12`, exit 0, no warnings, no errors (after
   each of the 5 builds of this run).
@@ -202,12 +217,6 @@ Movement state: `m_node` (walking to, or paused at once `m_arrived`), `m_previou
 
 ## Open issues
 
-- **Question for the user: `PlayerLimit`.** Bot sessions count towards `PlayerLimit` (100 in the run conf), so
-  with up to 120 wandering bots the bots queue (seen in run 1) and real players would be queued behind them.
-  Options: (a) wandering bot sessions skip the queue and do not count towards the limit (a small change in
-  `World::AddSession_` / the queue count, wandering bots only) - recommended; (b) leave the core alone and
-  document that `PlayerLimit` must be above `WanderBot.MaxBots` plus the real players; (c) cap the target at
-  `PlayerLimit` minus a reserve.
 - `Player::AddCooldown> Spell(... ) try to add and already existing cooldown?` errors (5019 wand shoot,
   23506 / 24347 trinkets) in run 3: from the reused `BattleBotAI` rotations / `UseTrinketEffects`, 26 in 5 min;
   check in step 7 whether battle bots show them too.

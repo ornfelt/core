@@ -127,6 +127,8 @@ class PlayerBotMgr
         bool IsChatBot(uint32 playerGuid);
         bool IsSavingAllowed() { return m_confAllowSaving; }
         bool IsDebugEnabled() const { return m_confDebug; }
+        // Wandering bot sessions skip the login queue and do not count towards PlayerLimit.
+        bool IsExemptFromPlayerLimit(WorldSession const* sess) const;
 
         uint32 GenBotAccountId() { return ++m_maxAccountId; }
         PlayerBotStats& GetStats(){ return m_stats; }

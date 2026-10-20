@@ -43,7 +43,7 @@ To find one:
   At most 49 results. A GM account sees both factions; a normal account only its own unless
   `AllowTwoSide.WhoList = 1`.
 - **The playermap** (`WanderBot.PlayerMapInterval` set, see below): every bot is a pin with its name, level, class
-  and zone. Clicking a pin copies a `.go xyz` command for where the bot was at the last write.
+  and zone. Clicking a bot pin copies `.goname <name>` (to where the bot is now; your own pin copies `.go xyz`).
 - **`PlayerBot.Debug = 1`**: `Server.log` names each bot as it spawns, with its level, class, zone and node.
 - **`.wanderbot nodes`**: shows the nodes near you; bots of fitting levels walk between them.
 
@@ -53,7 +53,7 @@ Once you have a name:
 | --- | --- |
 | `.goname <name>` | Teleports you to that bot (any online player). |
 | `.namego <name>` | Summons the bot to you. It then heads back to the node it was walking to (teleported there if it gets stuck). |
-| `.go xyz <x> <y> <z> [map]` | Teleports you to a position (what a playermap pin click copies). |
+| `.go xyz <x> <y> <z> [map]` | Teleports you to a position (what a click on a player's playermap pin copies). |
 
 Select the bot, then `.wanderbot info` shows which node it is heading to, and `.wanderbot remove` removes it.
 

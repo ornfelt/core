@@ -776,6 +776,19 @@ void PlayerBotMgr::GetWanderBotStats(WanderBotStats& stats) const
     }
 }
 
+void PlayerBotMgr::GetWanderBots(std::vector<Player*>& bots) const
+{
+    for (auto const& itr : m_bots)
+    {
+        if (itr.second->state != PB_STATE_ONLINE || !dynamic_cast<WanderBotAI*>(itr.second->ai.get()))
+            continue;
+
+        Player* pBot = itr.second->ai->me;
+        if (pBot && pBot->IsInWorld())
+            bots.push_back(pBot);
+    }
+}
+
 void PlayerBotMgr::DeleteWanderBots()
 {
     for (auto const& itr : m_bots)

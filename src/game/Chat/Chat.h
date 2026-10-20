@@ -310,6 +310,7 @@ class ChatHandler
         bool HandleWanderBotRemoveAllCommand(char* args);
         bool HandleWanderBotInfoCommand(char* args);
         bool HandleWanderBotNodesCommand(char* args);
+        bool HandleWanderBotListCommand(char* args);
 
         // spell_disabled
         bool HandleReloadSpellDisabledCommand(char *args);

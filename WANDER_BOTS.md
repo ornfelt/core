@@ -29,12 +29,15 @@ Wandering bots skip the login queue and do not count towards `PlayerLimit`.
 | `.wanderbot add [level] [count]` | Adds `count` bots (default 1) of `level` (default 0 = random). |
 | `.wanderbot remove` | Removes the selected wandering bot. |
 | `.wanderbot removeall` | Removes all of them; new ones come at the next refresh. |
+| `.wanderbot list [filter]` | Lists the online bots by name: level, race, class, faction, zone, and "(dead)". The filter is a level (`25`), a level range (`20-30`), or a text found in the name, race, class, faction or zone (`warlock`, `horde`, `stranglethorn vale`), case-insensitive. At most 50 lines. Works from the server console too. |
 | `.wanderbot nodes [range]` | Lists the wander nodes within `range` yards of you (default 50). |
 
 ### Finding a bot and going to it
 
-There is no command that lists the wandering bots by name. To find one:
+To find one:
 
+- **`.wanderbot list [filter]`**: names, levels, classes and zones, e.g. `.wanderbot list barrens` or
+  `.wanderbot list 40-50`.
 - **`/who`** (with `PlayerBot.ShowInWhoList = 1`): bots show up like players. Filter it, as the client allows:
   `/who 20-30` (levels), `/who z-"Stranglethorn Vale"` (zone), `/who c-Warlock` (class), `/who r-Orc` (race).
   At most 49 results. A GM account sees both factions; a normal account only its own unless

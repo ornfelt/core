@@ -117,6 +117,8 @@ class PlayerBotMgr
         bool DeleteWanderBot(Player* pBot);
         void DeleteWanderBots();
         void GetWanderBotStats(WanderBotStats& stats) const;
+        // The online wandering bots that are in the world.
+        void GetWanderBots(std::vector<Player*>& bots) const;
         uint32 GetWanderBotsTarget() const { return m_wanderBotsTarget; }
 
         void DeleteAll();

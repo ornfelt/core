@@ -139,6 +139,7 @@ ChatCommand * ChatHandler::getCommandTable()
         { "remove",    SEC_ADMINISTRATOR, false, &ChatHandler::HandleWanderBotRemoveCommand,    "Syntax: .wanderbot remove\r\n\r\nRemove the selected wandering bot.", nullptr },
         { "removeall", SEC_ADMINISTRATOR, true,  &ChatHandler::HandleWanderBotRemoveAllCommand, "Syntax: .wanderbot removeall\r\n\r\nRemove all wandering bots. New ones are spawned at the next refresh (WanderBot.Refresh).", nullptr },
         { "info",      SEC_ADMINISTRATOR, true,  &ChatHandler::HandleWanderBotInfoCommand,      "Syntax: .wanderbot info\r\n\r\nShow the wandering bot counts (online, loading, target, per faction and level) and the wander nodes loaded, and the node of the selected wandering bot.", nullptr },
+        { "list",      SEC_ADMINISTRATOR, true,  &ChatHandler::HandleWanderBotListCommand,      "Syntax: .wanderbot list [filter]\r\n\r\nList the online wandering bots by name: level, race, class, faction and zone. The filter is a level (25), a level range (20-30), or a text found in the name, race, class, faction or zone (warlock, horde, barrens). Use .goname <name> to go to one.", nullptr },
         { "nodes",     SEC_ADMINISTRATOR, false, &ChatHandler::HandleWanderBotNodesCommand,     "Syntax: .wanderbot nodes [range]\r\n\r\nList the wander nodes within range (default 50 yards) of you.", nullptr },
         { nullptr,     0,                 false, nullptr,                                       "", nullptr },
     };

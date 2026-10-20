@@ -69,9 +69,11 @@ Next: step 7's rest - an in-game look with a 1.12 client (the user), then mark t
       next to a hostile guard or a much stronger monster is moved to a spawn node (death loops at the Thelsamar and
       Wetlands graveyards), hunters recall / revive a lost pet out of combat, all bots learn their class-quest
       spells (warlocks had no demon at all). See "Verification".
-- [x] 6 Commands (2026-10-19): `.wanderbot add [level] [count]` (raises the current target by the bots added),
+- [x] 6 Commands (2026-10-19; `list` run 5): `.wanderbot add [level] [count]` (raises the current target by the bots added),
       `remove` (selected bot, lowers the target), `removeall` (target 0 until the next refresh), `info` (online /
-      loading / target, per faction, dead, per level band, nodes, the selected bot's node), `nodes [range]`.
+      loading / target, per faction, dead, per level band, nodes, the selected bot's node), `nodes [range]`,
+      `list [filter]` (run 5: name, level, race, class, faction, zone; a level, a level range or a text filter;
+      50 lines at most; console too; teleporting is `.goname <name>`, see `WANDER_BOTS.md`).
       `src/game/PlayerBots/WanderBotCommands.cpp`, the table in `src/game/Chat/Chat.cpp` with the help text in
       code (as the other bot tables; the world `command` table holds only 2 rows, so no migration).
 - [~] 7 Polish and load (run 4): load numbers for 0 / 60 / 120 bots (see "Verification"), `AddCooldown` errors
@@ -262,6 +264,9 @@ Movement state: `m_node` (walking to, or paused at once `m_arrived`), `m_previou
   the py app's `/api/players` (Flask test client, `SELECTED_SERVER=vmangos`) returned 60 characters, all kind 2
   (playerbot), 1 dead; after the clean shutdown the table was empty. The js app passes `node --check`; the ts
   app was not type-checked (no TypeScript compiler on this machine); neither was run.
+  `.wanderbot list` (console, 60 bots): no filter 50 of 60 shown with the narrow-the-filter line; `warlock` 10
+  (all warlocks), `horde` 28, `20-30` 4 (levels 21-26), `barrens` 1, `stranglethorn vale` 3 (all in it),
+  `zzzz` / `61-70` 0. Clean shutdown.
 
 - 2026-10-20 (run 4) build: `cmake --build build --config Release -j 12`, exit 0, no warnings (after each of the
   4 builds). Runtime: mangosd only, from `bin/Release` (3724 / 8085 free, only MySQL listening: nothing stopped

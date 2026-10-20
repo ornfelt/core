@@ -70,6 +70,8 @@ struct PlayerBotStats
 // Level bands of the wandering bot counts (.wanderbot info): 1-10, 11-20, ... 51-60.
 #define WANDER_BOT_STATS_LEVEL_BAND 10
 #define WANDER_BOT_STATS_LEVEL_BANDS 6
+// Hunters call a pet from this level on (CombatBotBaseAI::SummonPetIfNeeded), warlocks at any level.
+#define WANDER_BOT_STATS_HUNTER_PET_LEVEL 10
 
 struct WanderBotStats
 {
@@ -78,6 +80,10 @@ struct WanderBotStats
     uint32 alliance = 0;
     uint32 horde = 0;
     uint32 dead = 0;
+    uint32 hunters = 0;           // live hunters that should have a pet
+    uint32 huntersWithPet = 0;
+    uint32 warlocks = 0;          // live warlocks
+    uint32 warlocksWithPet = 0;
     uint32 perLevelBand[WANDER_BOT_STATS_LEVEL_BANDS] = {};
 };
 

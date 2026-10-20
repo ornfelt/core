@@ -8,6 +8,7 @@
 #include "Config/Config.h"
 #include "Chat.h"
 #include "Player.h"
+#include "Pet.h"
 #include "Group.h"
 #include "PlayerBotAI.h"
 #include "PartyBotAI.h"
@@ -735,6 +736,21 @@ void PlayerBotMgr::GetWanderBotStats(WanderBotStats& stats) const
 
         if (pBot->IsDead())
             ++stats.dead;
+        else
+        {
+            Pet const* pPet = pBot->GetPet();
+            bool const hasPet = pPet && pPet->IsAlive();
+            if (pBot->GetClass() == CLASS_WARLOCK)
+            {
+                ++stats.warlocks;
+                stats.warlocksWithPet += hasPet;
+            }
+            else if (pBot->GetClass() == CLASS_HUNTER && pBot->GetLevel() >= WANDER_BOT_STATS_HUNTER_PET_LEVEL)
+            {
+                ++stats.hunters;
+                stats.huntersWithPet += hasPet;
+            }
+        }
 
         uint32 const band = std::min<uint32>((pBot->GetLevel() - 1) / WANDER_BOT_STATS_LEVEL_BAND, WANDER_BOT_STATS_LEVEL_BANDS - 1);
         ++stats.perLevelBand[band];

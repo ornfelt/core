@@ -57,6 +57,9 @@ struct WanderNode;
 #define WB_LEASH_DISTANCE 60.0f
 // No player is attacked with a guard this close to it (neutral towns: the guards would kill the bot).
 #define WB_GUARD_CHECK_RANGE 50.0f
+// A bot revived this close to a hostile guard, or to a hostile creature more than WB_MAX_LEVEL_ABOVE levels above it
+// (a graveyard by an enemy town), is moved to a spawn node: it would be killed again before getting away.
+#define WB_REVIVE_DANGER_RANGE 50.0f
 
 // A temporary bot of random race, class, level, talents and gear that roams the world between wander nodes that
 // fit its level. Derived from BattleBotAI for its class rotations, eating / drinking and mounts; the battleground
@@ -76,8 +79,11 @@ public:
 private:
     void Initialize();
     void LearnTalentsAndSpells();
+    void LearnClassQuestSpells();
     void UpdateDeath();
     void OnRevived();
+    void RememberEnemy();
+    std::string DescribeLastEnemy() const;
     bool NeedsRest() const;
 
     // Movement (WanderBotMovement.cpp)
@@ -93,6 +99,7 @@ private:
     Unit* SelectAttackTarget(Unit* pExcept = nullptr) const;
     bool IsValidNewTarget(Unit const* pTarget) const;
     bool IsGuardNear(Unit const* pTarget) const;
+    bool IsInDanger() const;
     bool StartAttack(Unit* pVictim);
     bool CheckLeash();
 
@@ -101,6 +108,9 @@ private:
     bool m_arrived = false;
     uint32 m_pauseTimer = 0;
     uint32 m_deathTimer = 0;
+    // What the bot was fighting at its last update in combat, for the death log.
+    ObjectGuid m_lastEnemyGuid;
+    uint32 m_lastAttackerCount = 0;
 
     uint32 m_stuckCheckTimer = 0;
     uint32 m_stuckChecks = 0;

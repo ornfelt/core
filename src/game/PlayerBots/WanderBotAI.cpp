@@ -18,9 +18,14 @@
 #include "WanderNodeMgr.h"
 #include "PlayerBotMgr.h"
 #include "Player.h"
+#include "Creature.h"
+#include "Pet.h"
+#include "Map.h"
 #include "Log.h"
 #include "MotionMaster.h"
 #include "ObjectMgr.h"
+#include "QuestDef.h"
+#include "SpellMgr.h"
 #include "World.h"
 #include "Utilities/Random.h"
 
@@ -44,11 +49,40 @@ void WanderBotAI::LearnTalentsAndSpells()
             itr.second.level == me->GetLevel())
         {
             LearnPremadeSpecForClass();
+            LearnClassQuestSpells();
             return;
         }
     }
 
     LearnRandomTalentsAndAllSpells();
+    LearnClassQuestSpells();
+}
+
+void WanderBotAI::LearnClassQuestSpells()
+{
+    // Spells players get from class quests (warlock demons, druid forms, ...), which trainers do not teach.
+    for (auto const& itr : sObjectMgr.GetQuestTemplates())
+    {
+        Quest const* pQuest = itr.second.get();
+        if (!pQuest->IsActive() || !(pQuest->GetRequiredClasses() & me->GetClassMask()) ||
+            (pQuest->GetRequiredRaces() && !(pQuest->GetRequiredRaces() & me->GetRaceMask())) ||
+            pQuest->GetMinLevel() > me->GetLevel())
+            continue;
+
+        for (uint32 rewardSpellId : { pQuest->GetRewSpellCast(), pQuest->GetRewSpell() })
+        {
+            SpellEntry const* pRewardSpell = rewardSpellId ? sSpellMgr.GetSpellEntry(rewardSpellId) : nullptr;
+            if (!pRewardSpell)
+                continue;
+
+            for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+            {
+                uint32 const spellId = pRewardSpell->EffectTriggerSpell[i];
+                if (pRewardSpell->Effect[i] == SPELL_EFFECT_LEARN_SPELL && spellId && !me->HasSpell(spellId))
+                    me->LearnSpell(spellId, false);
+            }
+        }
+    }
 }
 
 void WanderBotAI::Initialize()
@@ -103,8 +137,11 @@ void WanderBotAI::UpdateDeath()
         OnJustDied();
         m_deathTimer = WB_RELEASE_DELAY;
         if (sPlayerBotMgr.IsDebugEnabled())
-            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[WanderBot] %s (level %u) died at map %u (%g, %g), zone %u.",
-                me->GetName(), me->GetLevel(), me->GetMapId(), me->GetPositionX(), me->GetPositionY(), me->GetZoneId());
+            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[WanderBot] %s (level %u, class %u) died at map %u (%g, %g), zone %u, fighting %s, %u attackers.",
+                me->GetName(), me->GetLevel(), me->GetClass(), me->GetMapId(), me->GetPositionX(), me->GetPositionY(), me->GetZoneId(),
+                DescribeLastEnemy().c_str(), m_lastAttackerCount);
+        m_lastEnemyGuid.Clear();
+        m_lastAttackerCount = 0;
         return;
     }
 
@@ -136,6 +173,45 @@ void WanderBotAI::OnRevived()
     m_node = nullptr;
     m_previousNode = nullptr;
     m_arrived = false;
+
+    // A graveyard next to an enemy town or strong monsters: the bot would be killed again before it got away.
+    if (IsInDanger())
+        TeleportToSpawnNode();
+}
+
+void WanderBotAI::RememberEnemy()
+{
+    if (!me->IsInCombat())
+    {
+        m_lastEnemyGuid.Clear();
+        m_lastAttackerCount = 0;
+        return;
+    }
+
+    Unit* pEnemy = me->GetVictim();
+    if (!pEnemy && !me->GetAttackers().empty())
+        pEnemy = *me->GetAttackers().begin();
+    if (pEnemy)
+        m_lastEnemyGuid = pEnemy->GetObjectGuid();
+    m_lastAttackerCount = me->GetAttackers().size();
+}
+
+std::string WanderBotAI::DescribeLastEnemy() const
+{
+    if (m_lastEnemyGuid.IsEmpty())
+        return "nothing";
+
+    Unit* pEnemy = me->GetMap()->GetUnit(m_lastEnemyGuid);
+    if (!pEnemy)
+        return m_lastEnemyGuid.GetString();
+
+    std::string description = pEnemy->GetName();
+    description += " (level " + std::to_string(pEnemy->GetLevel());
+    if (Player* pPlayer = pEnemy->ToPlayer())
+        description += dynamic_cast<WanderBotAI*>(pPlayer->AI()) ? ", wandering bot" : ", player";
+    else if (Creature const* pCreature = pEnemy->ToCreature())
+        description += ", entry " + std::to_string(pCreature->GetEntry()) + (pCreature->IsElite() ? ", elite" : "");
+    return description + ")";
 }
 
 bool WanderBotAI::NeedsRest() const
@@ -173,6 +249,8 @@ void WanderBotAI::UpdateAI(uint32 const diff)
         OnRevived();
         return;
     }
+
+    RememberEnemy();
 
     if (me->HasUnitState(UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL))
     {
@@ -235,6 +313,10 @@ void WanderBotAI::UpdateAI(uint32 const diff)
     {
         if (CheckForUnreachableTarget())
             return;
+
+        // BattleBotAI calls a hunter's pet only at spawn and revive: bring back one lost in a fight.
+        if (me->GetClass() == CLASS_HUNTER && (!me->GetPet() || !me->GetPet()->IsAlive()))
+            SummonPetIfNeeded();
 
         UpdateOutOfCombatAI();
 

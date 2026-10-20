@@ -4,8 +4,8 @@ Convert AzerothCore-NPCBots' wander nodes into a vmangos world migration (`wande
 
 The NPCBots files (`*wander_nodes*.sql`) are replayed in memory in file-name order (create, inserts,
 deletes, updates, the added columns), so the result is the final state of their table. Then only the
-continents of 1.12 (maps 0 / 1) are kept, BG-only flags are dropped, levels are clamped to 1-60 and
-links to removed nodes are dropped. No database is needed.
+continents of 1.12 (maps 0 / 1) are kept, BG-only flags are dropped, levels are clamped to 1-60,
+spawn flags in places 1.12 lacks are removed and links to removed nodes are dropped. No database is needed.
 
 Usage examples:
 default source tree ($code_root_dir/Code2/C++/AzerothCore-wotlk-with-NPCBots), new migration in sql/migrations:
@@ -114,6 +114,11 @@ SOURCE_DEFAULTS = {"name": "RENAME_ME", "mapid": "0", "zoneid": "0", "areaid": "
                    "maxlevel": "0", "flags": "0", "x": "0", "y": "0", "z": "0", "o": "0", "links": None}
 
 LEVEL_BAND_SIZE = 10  # summary only
+
+# Flags removed for 1.12: spawn spots in places added after vanilla (the zone level bands of the data match 1.12).
+FLAGS_REMOVED_FOR_1_12 = {
+    233: WANDER_NODE_FLAG_SPAWN,  # Mudsprocket: a TBC town, empty land in 1.12 Dustwallow Marsh
+}
 
 
 class SqlError(Exception):
@@ -402,6 +407,9 @@ def convert(table, maps, stats):
         flags = int(row["flags"])
         if flags & ~KEPT_FLAGS_MASK:
             stats["flags_stripped"] += 1
+        if flags & FLAGS_REMOVED_FOR_1_12.get(node_id, 0):
+            flags &= ~FLAGS_REMOVED_FOR_1_12[node_id]
+            stats["flags_1_12"] += 1
         kept[node_id] = {
             "id": node_id,
             "name": row["name"],
@@ -517,7 +525,7 @@ def print_summary(nodes, stats, maps):
     write_info_alt(f"  dropped: {stats['dropped_map']} on other maps, {stats['dropped_level']} above level "
                    f"{MAX_LEVEL} {stats['dropped_level_ids'] or ''}")
     write_info_alt(f"  levels clamped to {MAX_LEVEL}: {stats['clamped_level']}, BG flags stripped: "
-                   f"{stats['flags_stripped']}")
+                   f"{stats['flags_stripped']}, flags removed for 1.12: {stats['flags_1_12']}")
     write_info_alt(f"  links dropped: {stats['links_dropped']} to removed nodes, {stats['links_bad']} self / duplicate")
     if stats["no_links"]:
         write_warn(f"  nodes without links ({len(stats['no_links'])}): {stats['no_links']}")
@@ -597,7 +605,7 @@ def main():
     write_ok(f"  final NPCBots table: {len(table.rows)} nodes, columns {', '.join(table.columns)}")
 
     stats = {"dropped_map": 0, "dropped_level": 0, "dropped_level_ids": [], "clamped_level": 0,
-             "flags_stripped": 0, "links_dropped": 0, "links_bad": 0, "no_links": []}
+             "flags_stripped": 0, "flags_1_12": 0, "links_dropped": 0, "links_bad": 0, "no_links": []}
     nodes = convert(table, maps, stats)
     print_summary(nodes, stats, maps)
 

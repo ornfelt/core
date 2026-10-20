@@ -40,6 +40,22 @@ namespace
             WorldObject const* m_pObject;
             float m_range;
     };
+
+    // A live hostile guard, or a hostile creature far above the bot's level, in range.
+    class WanderBotDangerCheck
+    {
+        public:
+            WanderBotDangerCheck(Player const* pBot, float range) : m_pBot(pBot), m_range(range) {}
+            WorldObject const& GetFocusObject() const { return *m_pBot; }
+            bool operator()(Creature* pCreature) const
+            {
+                return pCreature->IsAlive() && m_pBot->IsWithinDistInMap(pCreature, m_range) && pCreature->IsHostileTo(m_pBot) &&
+                      (pCreature->IsGuard() || pCreature->GetLevel() > m_pBot->GetLevel() + WB_MAX_LEVEL_ABOVE);
+            }
+        private:
+            Player const* m_pBot;
+            float m_range;
+    };
 }
 
 bool WanderBotAI::IsGuardNear(Unit const* pTarget) const
@@ -49,6 +65,15 @@ bool WanderBotAI::IsGuardNear(Unit const* pTarget) const
     MaNGOS::CreatureSearcher<WanderBotGuardCheck> searcher(pGuard, check);
     Cell::VisitGridObjects(pTarget, searcher, WB_GUARD_CHECK_RANGE);
     return pGuard != nullptr;
+}
+
+bool WanderBotAI::IsInDanger() const
+{
+    Creature* pDanger = nullptr;
+    WanderBotDangerCheck check(me, WB_REVIVE_DANGER_RANGE);
+    MaNGOS::CreatureSearcher<WanderBotDangerCheck> searcher(pDanger, check);
+    Cell::VisitGridObjects(me, searcher, WB_REVIVE_DANGER_RANGE);
+    return pDanger != nullptr;
 }
 
 bool WanderBotAI::StartAttack(Unit* pVictim)

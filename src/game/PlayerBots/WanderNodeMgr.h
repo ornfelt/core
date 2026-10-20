@@ -52,6 +52,11 @@ enum WanderNodeFlags
 #define WANDER_NODE_LEVEL_MARGIN 2
 // Spawning / teleporting on start zone nodes (max level up to this) needs the bot's own faction flag.
 #define WANDER_NODE_START_ZONE_MAX_LEVEL 10
+// A node this close to the spawn point of a guard (or a creature that calls guards) hostile to a team is closed to
+// that team's bots (enemy towns and outposts the node flags do not cover: the guards kill low level bots in a hit).
+#define WANDER_NODE_HOSTILE_GUARD_RANGE 40.0f
+
+struct WanderNodeLoadStats;
 
 struct WanderNode
 {
@@ -66,6 +71,8 @@ struct WanderNode
     uint32 maxWaitTime = 0;
     float proximity = 0.0f;
     uint32 flags = 0;
+    bool guardedAgainstAlliance = false; // a guard hostile to Alliance is near
+    bool guardedAgainstHorde = false;    // a guard hostile to Horde is near
     float x = 0.0f;
     float y = 0.0f;
     float z = 0.0f;
@@ -73,6 +80,7 @@ struct WanderNode
     std::vector<WanderNode const*> links;
 
     bool HasFlag(uint32 flag) const { return (flags & flag) != 0; }
+    bool IsGuardedAgainst(Team team) const { return team == ALLIANCE ? guardedAgainstAlliance : (team == HORDE && guardedAgainstHorde); }
     bool FitsLevel(uint32 level) const { return level + WANDER_NODE_LEVEL_MARGIN >= minLevel && level <= maxLevel; }
     // A bot of this team may walk here.
     bool IsWalkableFor(Team team) const;
@@ -105,6 +113,8 @@ class WanderNodeMgr
         void GetNodesInRange(uint32 mapId, float x, float y, float range, std::vector<WanderNode const*>& nodes) const;
 
     private:
+        void MarkGuardedNodes(WanderNodeLoadStats& stats);
+
         std::unordered_map<uint32, WanderNode> m_nodes;
         std::vector<WanderNode const*> m_spawnNodes;
 };

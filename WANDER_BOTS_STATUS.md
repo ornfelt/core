@@ -1,9 +1,9 @@
 # Wandering bots - status
-Last run: 2026-10-19 (run 3) - wandering bot sessions skip the login queue and do not count towards `PlayerLimit`
-(the user chose option (a) of run 2's question).
-Before that (run 2): step 3, step 4, most of step 5 and step 6.
-Next: step 5's rest (pets checked in a run, deaths per hour looked at per cause) and step 2c's open part; then
-step 7.
+Last run: 2026-10-20 (run 4) - step 2c finished (zone levels checked, Mudsprocket spawn flag removed), step 5
+finished (deaths by cause: hostile-guard nodes closed per team, revive danger check, hunter pets recalled, warlock
+demons learned from class quests), step 7 mostly (load numbers for 0 / 60 / 120 bots, `AddCooldown` errors traced).
+Next: step 7's rest - an in-game look with a 1.12 client (the user), then mark the work done; optional tuning from
+"Open issues".
 
 ## Steps
 
@@ -15,7 +15,7 @@ step 7.
       with an error); documented in the "PLAYER BOTS" section of `src/mangosd/mangosd.conf.dist.in`,
       `my_confs/mangosd.conf`, `my_confs/linux/mangosd.conf`, and the run conf `bin/Release/mangosd.conf`
       (gitignored).
-- [~] 2 Wander nodes:
+- [x] 2 Wander nodes:
   - [x] 2a (2026-10-19) Converter `contrib/wander_nodes/convert_npcbots_wander_nodes.py`: replays the 19 NPCBots
         `*wander_nodes*.sql` files in file-name order in memory (no DB needed: the local DB user cannot create
         a scratch schema), keeps maps 0 / 1, masks the flags, clamps levels to 1-60 (drops min level > 60),
@@ -24,11 +24,15 @@ step 7.
   - [x] 2b (2026-10-19) `sql/migrations/20261019184711_world.sql` (generated): `wander_bot_nodes`, 811 nodes on
         map 0 (45 spawn), 1507 on map 1 (48 spawn). Applied to the local `vmangos_mangos`. Regenerate with
         `python contrib/wander_nodes/convert_npcbots_wander_nodes.py --timestamp 20261019184711`.
-  - [~] 2c (2026-10-19) Done at load in `WanderNodeMgr`: area ids 1.12 lacks are remapped from the terrain;
-        capital zones (`area_template.flags & AREA_FLAG_CAPITAL`) force their team's faction flag (the
-        NPCBots data already has them right: 1 node each in Stormwind / Ironforge / Darnassus / Thunder Bluff).
-        Left: the zone level bands against vanilla (`area_template.area_level`), and an explicit check for
-        WotLK-only spots on old terrain (Stormwind Harbor, the Northrend zeppelin / boat docks).
+  - [x] 2c (2026-10-19 / run 4) Done at load in `WanderNodeMgr`: area ids 1.12 lacks are remapped from the
+        terrain; capital zones (`area_template.flags & AREA_FLAG_CAPITAL`) force their team's faction flag.
+        Run 4: the node level bands per zone checked against the 1.12 zone ranges (`area_template.area_level` is 0
+        for almost every zone, so the 1.12 ranges were used): they match (NPCBots' WotLK bands equal vanilla for
+        these zones; the wide ranges come from border nodes, e.g. Barrens nodes on the Dustwallow coast at 33-45,
+        Twilight Grove / Bough Shadow / Tainted Scar at 50-60). No Stormwind Harbor or WotLK zeppelin-tower nodes
+        exist (searched by name and position). Mudsprocket (233, a TBC town) loses its spawn flag in the converter
+        (`FLAGS_REMOVED_FOR_1_12`); migration regenerated with the same timestamp, local DB updated. Run 4 also
+        closes nodes within 40 yd of a hostile guard spawn per team (see "Decisions").
   - [x] 2d (2026-10-19) `src/game/PlayerBots/WanderNodeMgr.h/.cpp` (+ CMake, loaded in
         `World::SetInitialWorldSettings` before `sPlayerBotMgr.Load()`): load only with `WanderBot.Enable`,
         validation, `SelectSpawnNode`, `SelectNextNode`, `FindNearestNode`, `GetNodesInRange`; a load summary.
@@ -52,36 +56,55 @@ step 7.
       below 85 % health / 60 % mana until full (`BattleBotAI::DrinkAndEat`); stuck: < 3 yd in 5 s three times ->
       turn back to the previous node once, then a teleport onto the node. Death: release after 5 s, revive at the
       graveyard 10 s later at 50 %, go on from the nearest fitting node.
-- [~] 5 Fighting (2026-10-19): `WanderBotTargeting.cpp` - attackers first (nearest), then the pet's attacker, then
+- [x] 5 Fighting (2026-10-19 / run 4): `WanderBotTargeting.cpp` - attackers first (nearest), then the pet's attacker, then
       (rested only) hostile monsters within 25 yd and LOS (no critters, civilians, guards, world bosses, no
       monster fighting someone else; normal ones up to 3 levels above / 4 below, elites only 3+ levels below
       the bot, down to 8 below) and, on PvP realms, enemy-faction players / bots / their pets 12 above / 9 below
       with no guard within 50 yd of them; leash 60 yd from where the fight started unless the target attacks the
-      bot. Rotations, pets and trinkets come from `BattleBotAI`. Left: a run that checks hunter / warlock pets
-      fight, the deaths per hour (about 5 per bot per hour in run 3) looked at per cause.
+      bot. Rotations, pets and trinkets come from `BattleBotAI`.
+      Run 4: the death log names the last enemy and the attacker count (`PlayerBot.Debug = 1`); `.wanderbot info`
+      counts live pets per class. Fixes from the causes: nodes near hostile guards closed per team, a revived bot
+      next to a hostile guard or a much stronger monster is moved to a spawn node (death loops at the Thelsamar and
+      Wetlands graveyards), hunters recall / revive a lost pet out of combat, all bots learn their class-quest
+      spells (warlocks had no demon at all). See "Verification".
 - [x] 6 Commands (2026-10-19): `.wanderbot add [level] [count]` (raises the current target by the bots added),
       `remove` (selected bot, lowers the target), `removeall` (target 0 until the next refresh), `info` (online /
       loading / target, per faction, dead, per level band, nodes, the selected bot's node), `nodes [range]`.
       `src/game/PlayerBots/WanderBotCommands.cpp`, the table in `src/game/Chat/Chat.cpp` with the help text in
       code (as the other bot tables; the world `command` table holds only 2 rows, so no migration).
-- [ ] 7 Polish and load: load numbers for 0 / 60 / 120 bots, the `AddCooldown` errors, deaths per hour, warnings,
-      final review against "Requirements".
+- [~] 7 Polish and load (run 4): load numbers for 0 / 60 / 120 bots (see "Verification"), `AddCooldown` errors
+      traced to the shared trinket / wand code (left, see "Decisions"), deaths per hour down from 12.7 to 8.8,
+      no build warnings, review against "Requirements" (below). Mounts from level 40 were already in step 4.
+      Left: an in-game look with a 1.12 client (needs the user).
+
+### Review against "Requirements" (run 4)
+- Conf min / max (60 / 120 by default) and an off switch: `WanderBot.Enable`, `MinBots`, `MaxBots` (step 1);
+  `Enable = 0` loads no nodes and spawns nothing (run 4, 0-bot run: "Wander nodes: 0 loaded").
+- Wander anywhere between nodes: 2318 nodes on both continents, about 535 node arrivals per 8 minutes with 120 bots.
+- Attack monsters, and on a PvP realm enemy players / wandering bots: yes (35 of 141 deaths in run 4b were to
+  enemy wandering bots, so PvP happens both ways). Real players: same code path, not seen with a real player.
+- Random spawn places, levels 1-60, gear, names, race / class, talents: yes (step 3).
+- Level-appropriate zones: node level fit plus the margin; deaths spread over the level bands.
+- No leveling: XP rate 0, and every XP source (kills, exploration, quests) goes through `Player::GiveXP`, which
+  applies it.
 
 ## Design
 
 ### Files
 - `src/game/PlayerBots/WanderNodeMgr.h/.cpp`: `WanderNode` (id, name, map, zone, area, min / max level,
-  min / max wait, proximity, flags, position, links as node pointers; `FitsLevel`, `IsWalkableFor`,
-  `IsStartPointFor`, `HasLinkFor`), the loader, validation and the graph queries. Singleton `sWanderNodeMgr`.
+  min / max wait, proximity, flags, `guardedAgainstAlliance / Horde`, position, links as node pointers;
+  `FitsLevel`, `IsGuardedAgainst`, `IsWalkableFor`, `IsStartPointFor`, `HasLinkFor`), the loader, validation,
+  `MarkGuardedNodes` and the graph queries. Singleton `sWanderNodeMgr`.
 - `src/game/PlayerBots/WanderBotAI.h`: the class and every tuning constant (`WB_*`).
-- `src/game/PlayerBots/WanderBotAI.cpp`: init, `UpdateAI` (the `BattleBotAI` flow minus the battleground parts),
-  death / revive, rest check.
+- `src/game/PlayerBots/WanderBotAI.cpp`: init (`LearnClassQuestSpells`), `UpdateAI` (the `BattleBotAI` flow minus
+  the battleground parts, plus the hunter pet recall), death / revive (`RememberEnemy` / `DescribeLastEnemy` for
+  the death log, the revive danger check), rest check.
 - `src/game/PlayerBots/WanderBotMovement.cpp`: node walking, pauses, stuck handling, spawn-node teleport,
   `MovementInform`.
-- `src/game/PlayerBots/WanderBotTargeting.cpp`: target scan, PvP rules, guard check, leash.
+- `src/game/PlayerBots/WanderBotTargeting.cpp`: target scan, PvP rules, guard check, revive danger check, leash.
 - `src/game/PlayerBots/WanderBotCommands.cpp`: the `.wanderbot` handlers.
 - `src/game/PlayerBots/PlayerBotMgr.h/.cpp`: `UpdateWanderBots`, `AddWanderBot(s)`, `DeleteWanderBot(s)`,
-  `GetWanderBotStats`, `IsDebugEnabled`; `DeleteBattleBots` and `.battlebot remove` skip wandering bots.
+  `GetWanderBotStats` (run 4: live pets of hunters level 10+ and warlocks), `IsDebugEnabled`; `DeleteBattleBots` and `.battlebot remove` skip wandering bots.
 - `src/game/PlayerBots/CombatBotBaseAI.h/.cpp`: `virtual GetRandomGearLevelDifference()` (party bot config by
   default, so party / battle bots are unchanged) and `LearnRandomTalentsAndAllSpells()` (the existing fallback
   branch of `LearnPremadeSpecForClass`, moved out so `WanderBotAI` can call it).
@@ -182,6 +205,26 @@ Movement state: `m_node` (walking to, or paused at once `m_arrived`), `m_previou
 - **`.wanderbot add` / `remove` move the current target** so the loop does not undo them at once; the next
   refresh picks a new target as usual. `removeall` sets the target to 0 until the next refresh.
 - **Hostile towns**: enemy capitals are never spawn / walk targets (node flags, capital check at load).
+  Run 4: at load, every node within 40 yd (`WANDER_NODE_HOSTILE_GUARD_RANGE`) of a guard spawn
+  (`CREATURE_FLAG_EXTRA_GUARD`, or `CREATURE_STATIC_FLAG_CALLS_GUARDS` town folk) whose faction is hostile to the
+  human / orc faction template is closed to that team (walking and spawning). Spawns from ObjectMgr's creature data
+  (patch-filtered), not a SQL query.
+- **Revive danger check** (run 4): run 4a's data had two graveyard death loops (one bot 11 times at the Wetlands
+  graveyard to summoned Menethil Guards, one 12 times at Thelsamar to Mountaineer Stenn, who has no guard flag).
+  A bot revived with a live hostile guard, or a hostile creature more than `WB_MAX_LEVEL_ABOVE` levels above it,
+  within 50 yd is teleported to a fitting spawn node. Not a guard-only check: the killers there were neither
+  static spawns nor guard-flagged.
+- **Hunter pets** (run 4): `BattleBotAI` calls a hunter pet only at spawn, revive and BG start, so a pet lost in a
+  fight stayed lost (about half the hunters had none). `WanderBotAI` calls `SummonPetIfNeeded` out of combat while
+  the hunter has no live pet; `BattleBotAI` is unchanged.
+- **Class-quest spells** (run 4): warlock demons, druid bear / aquatic form and the like are class-quest rewards,
+  which `LearnRandomTalentsAndAllSpells` (learn-all-trainer + items) does not give, so wandering warlocks had no
+  demon (0 of 17 with a pet). `LearnClassQuestSpells` teaches what the `LEARN_SPELL` effects of the reward spells
+  of active class quests up to the bot's level teach (race-restricted quests only for that race). Read from the
+  quest templates, not a hard-coded list.
+- **`AddCooldown` errors**: left as they are. They come from `CombatBotBaseAI::UseItemEffect` (trinkets 23506 /
+  24347, 30 of 37 in runs 4a) and the wand / auto shot calls shared with `PartyBotAI`; `Player::AddCooldown` logs
+  and returns, so nothing breaks. Fixing them means changing the shared bot code (party / battle bots too).
 - **Node validation at load is terrain only** (see run 1 of this ledger); reachability is handled at runtime by
   the stuck check (3 runs: 0 stuck teleports so far).
 - **Run setup on this machine** (Windows): build with `cmake --build build --config Release`; the binaries and
@@ -191,6 +234,33 @@ Movement state: `m_node` (walking to, or paused at once `m_arrived`), `m_previou
   fed through stdin.
 
 ## Verification
+
+- 2026-10-20 (run 4) build: `cmake --build build --config Release -j 12`, exit 0, no warnings (after each of the
+  4 builds). Runtime: mangosd only, from `bin/Release` (3724 / 8085 free, only MySQL listening: nothing stopped
+  or restored), scratch confs with `PlayerBot.Debug = 1`, `PlayerLimit = 0`, `PerformanceLog.SlowMapSystemUpdate`
+  / `SlowSessionsUpdate = 1`, console fed through stdin, clean shutdown (exit 0) every time. Load = mangosd CPU time
+  over a fixed window after the bots were in (the "map system" time is wall time and includes the wait for the map
+  threads: 20-22 ms median per tick with or without bots, so it does not measure the bots):
+
+  | Run | Bots | Window | mangosd CPU (one core) | World ticks > 100 ms | Deaths / bot / hour |
+  | --- | --- | --- | --- | --- | --- |
+  | 4a-0 | 0 (`Enable = 0`, 0 nodes loaded) | 180 s | 0.4 % | 0 | - |
+  | 4a-60 | 60 (min = max) | 180 s | 12.3 % | 0 | 9.3 |
+  | 4a-120 | 120 (min = max) | 481 s | 15.4 % | 2 (max 104 ms) | 12.7 |
+  | 4b | 120, guard nodes / revive check / hunter pets | 480 s | 15.5 % | 4 (max 144 ms) | 8.8 |
+  | 4c | 60-120 (the defaults), plus class-quest spells | 300 s | 14.4 % | 4 (max 115 ms) | 7.4 |
+
+  - 4a-120 deaths by cause: 146 of 225 monsters (80 in packs), 38 wandering bots, 25 no enemy, 16 elites; the two
+    graveyard death loops (27 Menethil Guard, 24 Mountaineer Stenn). Pets: 8-10 of 24-27 hunters / warlocks.
+  - 4b: 67 / 74 nodes closed to Alliance / Horde; no guard among the top killers; 7 spawn-node teleports (the
+    revive check); pets 9-10 of 11 hunters, 0 of 17-18 warlocks (no demon spell: fixed in 4c).
+  - 4c: 191 spawns, `.wanderbot info` 119 online (target 119) at the start of the window and 97 (target 97) at the
+    end, within [60, 120]; Alliance 57 / Horde 62; levels 20 / 21 / 17 / 19 / 24 / 18 per band of 10; pets 12 of 13
+    hunters, 19 of 21 warlocks (then 8 / 9 and 8 / 8); 312 node arrivals, 0 stuck teleports, 5 spawn-node
+    teleports; deaths 35 monster packs, 18 monsters, 8 wandering bots, 9 no enemy, 4 elites.
+  - Errors from bot code: `AddCooldown` (41 in 4c, see "Decisions"), and 3 `CastSpell: unknown spell id 0` in 4c
+    only (see "Open issues"). No crash or assert.
+  - Not run: an in-game look (needs a 1.12 client and the user), a real player in PvP with the bots.
 
 - 2026-10-19 (run 3) build: exit 0, no warnings. Server run 4 (`PlayerLimit = 20` in the scratch conf): 62 bots
   online at 1:21 and 82 at 2:41, `0 queued` both times, Alliance 39 / Horde 43, 106 node arrivals, 17 deaths,
@@ -217,19 +287,22 @@ Movement state: `m_node` (walking to, or paused at once `m_arrived`), `m_previou
 
 ## Open issues
 
-- `Player::AddCooldown> Spell(... ) try to add and already existing cooldown?` errors (5019 wand shoot,
-  23506 / 24347 trinkets) in run 3: from the reused `BattleBotAI` rotations / `UseTrinketEffects`, 26 in 5 min;
-  check in step 7 whether battle bots show them too.
-- Deaths: about 5 per bot per hour in run 3, spread over many zones; look at the causes (monsters pulled in
-  packs, PvP, elites aggroing) in step 5 / 7.
+- `Player::AddCooldown` errors: about 3 per minute with 120 bots, from the shared trinket / wand code (see
+  "Decisions"). A fix belongs in `CombatBotBaseAI` and would touch party / battle bots: the user's call.
+- Deaths: 8.8 per bot per hour with 120 bots after run 4's fixes, mostly monster packs (78 of 141) and PvP between
+  wandering bots (35). Tuning left open: a smaller `WB_AGGRO_RANGE`, or pack avoidance (count the monsters near
+  a target before pulling it). "No enemy" deaths (9) are one-shots within one AI second or falls.
+- `CastSpell: unknown spell id 0 by caster: Player ...`: 3 times in run 4c, all from two level 4 human paladins
+  that spawned in Stormwind / Ironforge; not in the four other runs. The level 4 paladins learn no class-quest
+  spell (the first paladin one is level 12), so it is not run 4's change; the source in the bot code was not
+  found (the `CastSpell(..., uint32)` callers in `PlayerBots` all check their id). Logged and ignored by the core.
 - `JUMP_BEGIN` / `JUMP_END` and `MILL_RADIUS` flags are loaded but not used by the movement yet.
 - 18 nodes get their area from the terrain at load: 4 use area ids 1.12 lacks (215 Plaguewood Tower 4067,
   233 Mudsprocket 4010, 1905 / 1907 Dustwallow 4046 / 4049), 14 sit at dungeon entrances whose vanilla area is
-  filed under the instance map. Both are handled; Mudsprocket (a TBC town) is a spawn node in an empty spot of
-  1.12 Dustwallow - harmless, but could lose its spawn flag in 2c.
+  filed under the instance map. Both are handled; Mudsprocket (a TBC town)
+  lost its spawn flag in run 4.
 - Dropped at conversion: 92 "Grim Batol", 451-454 "DragonmawGates*" (level 61-70 in NPCBots, elite dragons in
   1.12). 409 "Seradane" was 60-80, clamped to 60-60.
-- Stormwind Harbor / WotLK zeppelin and boat docks, and NPCBots' WotLK level bands: still to check in 2c.
 - `RandomBot.Enable = 1` (Min 50 / Max 150) in both `my_confs` copies is unrelated to wandering bots and left
   as it is.
 - Uncommitted `src/shared/Progression.h` (the user's client build tweak) is left alone.

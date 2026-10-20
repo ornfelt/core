@@ -22,6 +22,7 @@
 #include "Log.h"
 #include "Map.h"
 #include "ObjectMgr.h"
+#include "Player.h"
 #include "Util.h"
 #include "World.h"
 #include "Utilities/Random.h"
@@ -39,6 +40,9 @@ INSTANTIATE_SINGLETON_1(WanderNodeMgr);
 
 bool WanderNode::IsWalkableFor(Team team) const
 {
+    if (IsGuardedAgainst(team))
+        return false;
+
     if (HasFlag(WANDER_NODE_FLAG_IGNORES_FACTION))
         return true;
 
@@ -55,7 +59,7 @@ bool WanderNode::IsWalkableFor(Team team) const
 
 bool WanderNode::IsStartPointFor(Team team) const
 {
-    if (!HasFlag(WANDER_NODE_FLAG_SPAWN) || HasFlag(WANDER_NODE_FLAG_NOT_A_START_POINT))
+    if (!HasFlag(WANDER_NODE_FLAG_SPAWN) || HasFlag(WANDER_NODE_FLAG_NOT_A_START_POINT) || IsGuardedAgainst(team))
         return false;
 
     // Start zones are never shared: the node must belong to the bot's faction.
@@ -82,6 +86,8 @@ struct WanderNodeLoadStats
     uint32 levelsFixed = 0;
     uint32 areasRemapped = 0;
     uint32 capitalFlags = 0;
+    uint32 guardedAgainstAlliance = 0;
+    uint32 guardedAgainstHorde = 0;
     uint32 linksDropped = 0;
     uint32 noLinks = 0;
 };
@@ -214,6 +220,8 @@ void WanderNodeMgr::Load()
     }
     while (result->NextRow());
 
+    MarkGuardedNodes(stats);
+
     // Links point into m_nodes, which is not changed after this point.
     for (auto& itr : m_nodes)
     {
@@ -261,6 +269,8 @@ void WanderNodeMgr::Load()
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "   skipped: %u not on a continent, %u without terrain, %u above the ground", stats.badMap, stats.noTerrain, stats.aboveGround);
     sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "   fixed: %u flags, %u levels, %u areas from the terrain, %u capital faction flags; %u links dropped, %u nodes without links",
         stats.flagsFixed, stats.levelsFixed, stats.areasRemapped, stats.capitalFlags, stats.linksDropped, stats.noLinks);
+    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "   near hostile guards: %u nodes closed to Alliance, %u to Horde",
+        stats.guardedAgainstAlliance, stats.guardedAgainstHorde);
 
     for (Team team : { ALLIANCE, HORDE })
     {
@@ -273,6 +283,57 @@ void WanderNodeMgr::Load()
         if (!missing.empty())
             sLog.Out(LOG_DBERROR, LOG_LVL_ERROR, "Table `wander_bot_nodes`: no %s spawn node for levels:%s", team == ALLIANCE ? "Alliance" : "Horde", missing.c_str());
     }
+}
+
+void WanderNodeMgr::MarkGuardedNodes(WanderNodeLoadStats& stats)
+{
+    FactionTemplateEntry const* allianceFaction = sObjectMgr.GetFactionTemplateEntry(Player::GetFactionForRace(RACE_HUMAN));
+    FactionTemplateEntry const* hordeFaction = sObjectMgr.GetFactionTemplateEntry(Player::GetFactionForRace(RACE_ORC));
+    if (!allianceFaction || !hordeFaction)
+        return;
+
+    float const rangeSq = WANDER_NODE_HOSTILE_GUARD_RANGE * WANDER_NODE_HOSTILE_GUARD_RANGE;
+    auto markNodes = [&](CreatureDataPair const& spawn)
+    {
+        CreatureData const& data = spawn.second;
+        for (uint32 creatureId : data.creature_id)
+        {
+            CreatureInfo const* info = creatureId ? sObjectMgr.GetCreatureTemplate(creatureId) : nullptr;
+            // Guards, and the town folk that call them.
+            if (!info || !((info->flags_extra & CREATURE_FLAG_EXTRA_GUARD) || (info->static_flags1 & CREATURE_STATIC_FLAG_CALLS_GUARDS)))
+                continue;
+
+            FactionTemplateEntry const* guardFaction = sObjectMgr.GetFactionTemplateEntry(info->faction);
+            if (!guardFaction)
+                continue;
+
+            bool const hostileToAlliance = guardFaction->IsHostileTo(*allianceFaction);
+            bool const hostileToHorde = guardFaction->IsHostileTo(*hordeFaction);
+            if (!hostileToAlliance && !hostileToHorde)
+                continue;
+
+            for (auto& itr : m_nodes)
+            {
+                WanderNode& node = itr.second;
+                if (node.mapId != data.position.mapId || node.GetDistance2dSq(data.position.x, data.position.y) > rangeSq)
+                    continue;
+
+                if (hostileToAlliance && !node.guardedAgainstAlliance)
+                {
+                    node.guardedAgainstAlliance = true;
+                    ++stats.guardedAgainstAlliance;
+                }
+                if (hostileToHorde && !node.guardedAgainstHorde)
+                {
+                    node.guardedAgainstHorde = true;
+                    ++stats.guardedAgainstHorde;
+                }
+            }
+            break;
+        }
+        return false;
+    };
+    sObjectMgr.DoCreatureData(markNodes);
 }
 
 WanderNode const* WanderNodeMgr::GetNode(uint32 id) const

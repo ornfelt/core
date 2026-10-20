@@ -94,6 +94,8 @@ bool ChatHandler::HandleWanderBotInfoCommand(char* args)
         stats.online, stats.loading, sPlayerBotMgr.GetWanderBotsTarget(), sWorld.getConfig(CONFIG_UINT32_WANDER_BOT_MIN_BOTS),
         sWorld.getConfig(CONFIG_UINT32_WANDER_BOT_MAX_BOTS), sWorld.getConfig(CONFIG_UINT32_WANDER_BOT_REFRESH));
     PSendSysMessage("Alliance: %u, Horde: %u, dead: %u.", stats.alliance, stats.horde, stats.dead);
+    PSendSysMessage("Pets: %u of %u hunters (level %u+), %u of %u warlocks.", stats.huntersWithPet, stats.hunters,
+        WANDER_BOT_STATS_HUNTER_PET_LEVEL, stats.warlocksWithPet, stats.warlocks);
 
     std::string levels;
     for (uint32 band = 0; band < WANDER_BOT_STATS_LEVEL_BANDS; ++band)

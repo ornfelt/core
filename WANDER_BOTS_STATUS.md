@@ -1,7 +1,9 @@
 # Wandering bots - status
+User guide (config, GM commands, finding / teleporting to bots, playermap): `WANDER_BOTS.md`.
 Last run: 2026-10-20 (run 4) - step 2c finished (zone levels checked, Mudsprocket spawn flag removed), step 5
 finished (deaths by cause: hostile-guard nodes closed per team, revive danger check, hunter pets recalled, warlock
 demons learned from class quests), step 7 mostly (load numbers for 0 / 60 / 120 bots, `AddCooldown` errors traced).
+Then (run 5, the user's request): wandering bots on the playermap web apps (`characters_playermap`, step 8).
 Next: step 7's rest - an in-game look with a 1.12 client (the user), then mark the work done; optional tuning from
 "Open issues".
 
@@ -77,6 +79,13 @@ Next: step 7's rest - an in-game look with a 1.12 client (the user), then mark t
       no build warnings, review against "Requirements" (below). Mounts from level 40 were already in step 4.
       Left: an in-game look with a 1.12 client (needs the user).
 
+- [x] 8 Playermap (2026-10-20, run 5, asked by the user): the server writes the online wandering bots to
+      `characters_playermap` (characters DB, migration `20261020061142_characters.sql`) every
+      `WanderBot.PlayerMapInterval` ms (default 0 = off; 5000 in `my_confs` and the run conf). The vmangos playermap
+      apps in `Code2/Python/wander_nodes_util` (`py_map/app_cmangos.py`, `js_map_tbc/server.js`,
+      `ts_map_tbc/src/server.ts`, a separate repo) read it and show the rows as playerbots. No php map exists for
+      vmangos (the launcher allows php only for acore / tcore).
+
 ### Review against "Requirements" (run 4)
 - Conf min / max (60 / 120 by default) and an off switch: `WanderBot.Enable`, `MinBots`, `MaxBots` (step 1);
   `Enable = 0` loads no nodes and spawns nothing (run 4, 0-bot run: "Wander nodes: 0 loaded").
@@ -111,6 +120,10 @@ Next: step 7's rest - an in-game look with a 1.12 client (the user), then mark t
 - `src/game/PlayerBots/BattleBotAI.h`: `UpdateAI` and `MovementInform` are `override` instead of `final`.
 - `src/game/PlayerBots/PlayerBotAI.cpp`: `SpawnNewPlayer` creates a missing continent map.
 - `sql/migrations/20261019184711_world.sql`: `wander_bot_nodes`.
+- `sql/migrations/20261020061142_characters.sql`: `characters_playermap` (guid, account, name, race, class, gender,
+  level, map, zone, position_x / y / z, extra_flags, online, dead): the columns the playermap apps select.
+- `PlayerBotMgr::UpdateWanderBotPlayerMap` / `ClearWanderBotPlayerMap`: config `WanderBot.PlayerMapInterval`
+  (`CONFIG_UINT32_WANDER_BOT_PLAYER_MAP_INTERVAL`).
 - `contrib/wander_nodes/convert_npcbots_wander_nodes.py`.
 
 ### Table `wander_bot_nodes` (world DB)
@@ -222,6 +235,14 @@ Movement state: `m_node` (walking to, or paused at once `m_arrived`), `m_previou
   demon (0 of 17 with a pet). `LearnClassQuestSpells` teaches what the `LEARN_SPELL` effects of the reward spells
   of active class quests up to the bot's level teach (race-restricted quests only for that race). Read from the
   quest templates, not a hard-coded list.
+- **Playermap** (run 5): the table name and columns are those of the user's AzerothCore NPCBots fork, so the
+  apps read it the same way. The whole table is replaced in one async transaction per interval (DELETE + one
+  multi-row INSERT; 120 rows), not row updates: bots that left drop out on the next write. It is emptied at startup
+  (`Load`, also when wandering bots or the interval are off, so no stale bots stay on the map) and at shutdown
+  (`DeleteAll`). Writes and clears use one DB serial id, so they run in order on one worker and the shutdown clear
+  is never overtaken by a queued write. A missing table is found once at startup (`SHOW TABLES`) and logged; no
+  writes then. Off by default in the dist conf: upstream servers do not get DB writes they did not ask for. A crash
+  leaves the last rows until the next start.
 - **`AddCooldown` errors**: left as they are. They come from `CombatBotBaseAI::UseItemEffect` (trinkets 23506 /
   24347, 30 of 37 in runs 4a) and the wand / auto shot calls shared with `PartyBotAI`; `Player::AddCooldown` logs
   and returns, so nothing breaks. Fixing them means changing the shared bot code (party / battle bots too).
@@ -234,6 +255,13 @@ Movement state: `m_node` (walking to, or paused at once `m_arrived`), `m_previou
   fed through stdin.
 
 ## Verification
+
+- 2026-10-20 (run 5, playermap) build: clean (game and mangosd, no warnings). Characters migration applied to the
+  local `vmangos_characters`. One mangosd run (the run conf, 60-120 bots, `WanderBot.PlayerMapInterval = 5000`):
+  50 s after start `characters_playermap` held 60 rows (both maps, levels 3-60, 2 dead), 60 again 6 s later;
+  the py app's `/api/players` (Flask test client, `SELECTED_SERVER=vmangos`) returned 60 characters, all kind 2
+  (playerbot), 1 dead; after the clean shutdown the table was empty. The js app passes `node --check`; the ts
+  app was not type-checked (no TypeScript compiler on this machine); neither was run.
 
 - 2026-10-20 (run 4) build: `cmake --build build --config Release -j 12`, exit 0, no warnings (after each of the
   4 builds). Runtime: mangosd only, from `bin/Release` (3724 / 8085 free, only MySQL listening: nothing stopped

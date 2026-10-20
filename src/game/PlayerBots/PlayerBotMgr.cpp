@@ -22,8 +22,13 @@
 #include "Utilities/Random.h"
 #include "Spell.h"
 
+#include <sstream>
+
 INSTANTIATE_SINGLETON_1(PlayerBotMgr);
 
+// The playermap writes and clears share this DB serial id, so they run in order on one DB worker (the clear at
+// shutdown cannot be overtaken by a write still queued).
+#define WANDER_BOT_PLAYER_MAP_SERIAL_ID 1
 // Wandering bots added or removed per manager update (PlayerBot.UpdateMs), so they do not all log in at once.
 #define WANDER_BOT_CHANGES_PER_UPDATE 4
 
@@ -48,6 +53,8 @@ PlayerBotMgr::PlayerBotMgr()
     m_lastBattleBotQueueUpdate = 0;
     m_lastWanderBotsRefresh = 0;
     m_wanderBotsTarget = 0;
+    m_lastWanderBotPlayerMapUpdate = 0;
+    m_hasPlayerMapTable = false;
 }
 
 PlayerBotMgr::~PlayerBotMgr()
@@ -153,6 +160,14 @@ void PlayerBotMgr::Load()
             sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[PlayerBotMgr] WanderBot.Enable is set but no wander nodes are loaded: no wandering bots.");
     }
 
+    // Playermap rows of a previous run are stale, whether or not wandering bots run now.
+    std::unique_ptr<QueryResult> playerMapTable(CharacterDatabase.Query("SHOW TABLES LIKE 'characters_playermap'"));
+    m_hasPlayerMapTable = playerMapTable != nullptr;
+    ClearWanderBotPlayerMap();
+    m_lastWanderBotPlayerMapUpdate = m_elapsedTime;
+    if (sWorld.getConfig(CONFIG_UINT32_WANDER_BOT_PLAYER_MAP_INTERVAL) && !m_hasPlayerMapTable)
+        sLog.Out(LOG_DBERROR, LOG_LVL_ERROR, "WanderBot.PlayerMapInterval is set but the characters DB has no `characters_playermap` table: wandering bots are not written to it.");
+
     // 8- Fill stats info
     m_stats.confMaxOnline = m_confMaxRandomBots;
     m_stats.confMinOnline = m_confMinRandomBots;
@@ -172,6 +187,7 @@ void PlayerBotMgr::DeleteAll()
 {
     m_stats.onlineCount = 0;
     m_stats.loadingCount = 0;
+    ClearWanderBotPlayerMap();
 
     for (auto i = m_bots.begin(); i != m_bots.end(); i++)
     {
@@ -387,7 +403,10 @@ void PlayerBotMgr::Update(uint32 diff)
     }
 
     if (sWorld.getConfig(CONFIG_BOOL_WANDER_BOT_ENABLE) && sWanderNodeMgr.IsLoaded())
+    {
         UpdateWanderBots();
+        UpdateWanderBotPlayerMap();
+    }
 
     if (m_confEnableRandomBots)
     {
@@ -765,6 +784,54 @@ void PlayerBotMgr::DeleteWanderBots()
             itr.second->requestRemoval = true;
     }
     m_wanderBotsTarget = 0;
+}
+
+void PlayerBotMgr::ClearWanderBotPlayerMap()
+{
+    if (!m_hasPlayerMapTable)
+        return;
+
+    CharacterDatabase.BeginTransaction(WANDER_BOT_PLAYER_MAP_SERIAL_ID);
+    CharacterDatabase.Execute("DELETE FROM `characters_playermap`");
+    CharacterDatabase.CommitTransaction();
+}
+
+void PlayerBotMgr::UpdateWanderBotPlayerMap()
+{
+    uint32 const interval = sWorld.getConfig(CONFIG_UINT32_WANDER_BOT_PLAYER_MAP_INTERVAL);
+    if (!interval || !m_hasPlayerMapTable || m_elapsedTime - m_lastWanderBotPlayerMapUpdate < interval)
+        return;
+    m_lastWanderBotPlayerMapUpdate = m_elapsedTime;
+
+    std::ostringstream rows;
+    for (auto const& itr : m_bots)
+    {
+        if (itr.second->state != PB_STATE_ONLINE || !dynamic_cast<WanderBotAI*>(itr.second->ai.get()))
+            continue;
+
+        Player const* pBot = itr.second->ai->me;
+        if (!pBot || !pBot->IsInWorld())
+            continue;
+
+        if (rows.tellp() > 0)
+            rows << ",";
+        rows << "(" << pBot->GetGUIDLow() << "," << itr.second->accountId << ",'" << pBot->GetName() << "',"
+             << uint32(pBot->GetRace()) << "," << uint32(pBot->GetClass()) << "," << uint32(pBot->GetGender()) << ","
+             << pBot->GetLevel() << "," << pBot->GetMapId() << "," << pBot->GetZoneId() << ","
+             << pBot->GetPositionX() << "," << pBot->GetPositionY() << "," << pBot->GetPositionZ() << ","
+             << (pBot->IsDead() ? 1 : 0) << ")";
+    }
+
+    // Replaced as a whole: bots that left are gone from the map at the next write.
+    CharacterDatabase.BeginTransaction(WANDER_BOT_PLAYER_MAP_SERIAL_ID);
+    CharacterDatabase.Execute("DELETE FROM `characters_playermap`");
+    if (rows.tellp() > 0)
+    {
+        std::string const insert = "INSERT INTO `characters_playermap` (`guid`, `account`, `name`, `race`, `class`, `gender`, `level`, "
+            "`map`, `zone`, `position_x`, `position_y`, `position_z`, `dead`) VALUES " + rows.str();
+        CharacterDatabase.Execute(insert.c_str());
+    }
+    CharacterDatabase.CommitTransaction();
 }
 
 void PlayerBotMgr::UpdateWanderBots()

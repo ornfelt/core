@@ -3252,6 +3252,11 @@ AHBot.itemcount = 50
 #        A lower number equals to gear being more close to the bot level.
 #        Default: 10 (bots will equip gear down to a minimum of 10 item level difference)
 #
+#    WanderBot.PlayerMapInterval
+#        How often (in milliseconds) the online wandering bots are written to the `characters_playermap` table of the
+#        characters DB, where playermap web apps can show them. The table is emptied at startup and shutdown.
+#        Default: 0 (off)
+#
 ###################################################################################################################
 
 RandomBot.Enable = 0
@@ -3278,6 +3283,7 @@ WanderBot.MaxBots = 120
 WanderBot.Refresh = 60000
 WanderBot.AutoEquip = 1
 WanderBot.RandomGearLevelDifference = 10
+WanderBot.PlayerMapInterval = 0
 
 ###################################################################################################################
 # MAIL FLOODING MITIGATION

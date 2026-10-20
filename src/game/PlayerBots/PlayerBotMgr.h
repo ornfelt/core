@@ -149,8 +149,13 @@ class PlayerBotMgr
         time_t m_lastBattleBotQueueUpdate;
         uint32 m_lastWanderBotsRefresh;
         uint32 m_wanderBotsTarget;
+        uint32 m_lastWanderBotPlayerMapUpdate;
+        bool m_hasPlayerMapTable; // the characters DB has `characters_playermap`
 
         void UpdateWanderBots();
+        // Writes the online wandering bots to `characters_playermap` every WanderBot.PlayerMapInterval ms.
+        void UpdateWanderBotPlayerMap();
+        void ClearWanderBotPlayerMap();
 
         std::map<uint64 /*pl guid*/, std::shared_ptr<PlayerBotEntry>> m_bots;
         std::map<uint32 /*account*/, uint32> m_tempBots;

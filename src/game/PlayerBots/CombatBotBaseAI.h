@@ -96,8 +96,10 @@ public:
     void LearnPremadeSpecForClass();
     void EquipPremadeGearTemplate();
     void EquipRandomGearInEmptySlots();
+    virtual uint32 GetRandomGearLevelDifference() const;
     void AutoEquipGear(uint32 option);
     void LearnRandomTalents();
+    void LearnRandomTalentsAndAllSpells();
     
     uint8 GetAttackersInRangeCount(float range) const;
     Unit* SelectAttackerDifferentFrom(Unit const* pExcept) const;

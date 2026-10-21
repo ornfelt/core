@@ -2446,14 +2446,17 @@ void CombatBotBaseAI::LearnPremadeSpecForClass()
             m_role = pSpec->role;
     }
     else
-    {
-        // Use gm command to learn spells on trainers and items.
-        LearnRandomTalents();
-        char trainerArgs[] = "";
-        char itemArgs[] = "";
-        ChatHandler(me).HandleLearnAllTrainerCommand(trainerArgs);
-        ChatHandler(me).HandleLearnAllItemsCommand(itemArgs);
-    }
+        LearnRandomTalentsAndAllSpells();
+}
+
+void CombatBotBaseAI::LearnRandomTalentsAndAllSpells()
+{
+    // Use gm command to learn spells on trainers and items.
+    LearnRandomTalents();
+    char trainerArgs[] = "";
+    char itemArgs[] = "";
+    ChatHandler(me).HandleLearnAllTrainerCommand(trainerArgs);
+    ChatHandler(me).HandleLearnAllItemsCommand(itemArgs);
 }
 
 void CombatBotBaseAI::LearnRandomTalents()
@@ -2592,6 +2595,11 @@ inline uint32 GetPrimaryItemStatForClassAndRole(uint8 playerClass, uint8 role)
     return ITEM_MOD_STAMINA;
 }
 
+uint32 CombatBotBaseAI::GetRandomGearLevelDifference() const
+{
+    return sWorld.getConfig(CONFIG_UINT32_PARTY_BOT_RANDOM_GEAR_LEVEL_DIFFERENCE);
+}
+
 void CombatBotBaseAI::EquipRandomGearInEmptySlots()
 {
     LearnArmorProficiencies();
@@ -2640,7 +2648,7 @@ void CombatBotBaseAI::EquipRandomGearInEmptySlots()
         }
 
         // Avoid low level items
-        if ((pProto->ItemLevel + sWorld.getConfig(CONFIG_UINT32_PARTY_BOT_RANDOM_GEAR_LEVEL_DIFFERENCE)) < me->GetLevel())
+        if ((pProto->ItemLevel + GetRandomGearLevelDifference()) < me->GetLevel())
             continue;
 
         if (me->CanUseItem(pProto, onlyPvE) != EQUIP_ERR_OK)

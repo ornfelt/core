@@ -358,6 +358,12 @@ enum eConfigUInt32Values
     CONFIG_UINT32_PARTY_BOT_AUTO_EQUIP,
     CONFIG_UINT32_BATTLE_BOT_AUTO_EQUIP,
     CONFIG_UINT32_PARTY_BOT_RANDOM_GEAR_LEVEL_DIFFERENCE,
+    CONFIG_UINT32_WANDER_BOT_MIN_BOTS,
+    CONFIG_UINT32_WANDER_BOT_MAX_BOTS,
+    CONFIG_UINT32_WANDER_BOT_REFRESH,
+    CONFIG_UINT32_WANDER_BOT_AUTO_EQUIP,
+    CONFIG_UINT32_WANDER_BOT_RANDOM_GEAR_LEVEL_DIFFERENCE,
+    CONFIG_UINT32_WANDER_BOT_PLAYER_MAP_INTERVAL,
     CONFIG_UINT32_PVP_POOL_SIZE_PER_FACTION,
     CONFIG_UINT32_LFG_MATCHMAKING_TIMER,
     CONFIG_UINT32_REUSABLE_GUID_POOL_SIZE,
@@ -614,6 +620,7 @@ enum eConfigBoolValues
     CONFIG_BOOL_VISIBILITY_FORCE_ACTIVE_OBJECTS,
     CONFIG_BOOL_PLAYER_BOT_SHOW_IN_WHO_LIST,
     CONFIG_BOOL_PARTY_BOT_SKIP_CHECKS,
+    CONFIG_BOOL_WANDER_BOT_ENABLE,
     CONFIG_BOOL_WORLD_AVAILABLE,
     CONFIG_BOOL_GM_CHEAT_GOD,
     CONFIG_BOOL_LFG_MATCHMAKING,
@@ -687,6 +694,8 @@ class World
         uint32 GetActiveAndQueuedSessionCount() const { return m_sessions.size(); }
         uint32 GetActiveSessionCount() const { return m_sessions.size() - m_QueuedSessions.size(); }
         uint32 GetQueuedSessionCount() const { return m_QueuedSessions.size(); }
+        // Active sessions that take a player slot (PlayerLimit / PlayerHardLimit): all but wandering bots.
+        uint32 GetPlayerLimitedSessionCount() const;
         // Get the maximum number of parallel sessions on the server since last reboot
         uint32 GetMaxQueuedSessionCount() const { return m_maxQueuedSessionCount; }
         uint32 GetMaxActiveSessionCount() const { return m_maxActiveSessionCount; }

@@ -305,6 +305,12 @@ class ChatHandler
         bool HandleBattleBotRemoveAllCommand(char* args);
         bool HandleBattleBotShowPathCommand(char* args);
         bool HandleBattleBotShowAllPathsCommand(char* args);
+        bool HandleWanderBotAddCommand(char* args);
+        bool HandleWanderBotRemoveCommand(char* args);
+        bool HandleWanderBotRemoveAllCommand(char* args);
+        bool HandleWanderBotInfoCommand(char* args);
+        bool HandleWanderBotNodesCommand(char* args);
+        bool HandleWanderBotListCommand(char* args);
 
         // spell_disabled
         bool HandleReloadSpellDisabledCommand(char *args);

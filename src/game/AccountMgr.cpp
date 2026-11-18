@@ -60,6 +60,7 @@ AccountOpResult AccountMgr::CreateAccount(std::string username, std::string pass
     std::string s_hex = srp.GetSalt().AsHexStr();
     std::string v_hex = srp.GetVerifier().AsHexStr();
 
+    LoginDatabase.escape_string(username);
     bool update_sv = LoginDatabase.PExecute(
         "INSERT INTO account(`username`, `v`, `s`, `joindate`) VALUES('%s','%s','%s',NOW())",
         username.c_str(), v_hex.c_str(), s_hex.c_str());
@@ -407,6 +408,18 @@ void AccountMgr::LoadAccountBanList(bool silent)
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "");
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> Loaded %u account bans", m_accountBanned.size());
     }
+}
+
+void AccountMgr::BanIP(std::string const& ip, uint32 unbandate)
+{
+    std::lock_guard<std::shared_timed_mutex> lock(m_ipBannedMutex);
+    m_ipBanned[ip] = unbandate;
+}
+
+void AccountMgr::UnbanIP(std::string const& ip)
+{
+    std::lock_guard<std::shared_timed_mutex> lock(m_ipBannedMutex);
+    m_ipBanned.erase(ip);
 }
 
 bool AccountMgr::IsIPBanned(std::string const& ip) const
